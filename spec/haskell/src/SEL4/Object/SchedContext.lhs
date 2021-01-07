@@ -33,7 +33,7 @@ This module uses the C preprocessor to select a target architecture.
 
 \begin{impdetails}
 
-> import Prelude hiding (Word, read)
+> import Prelude hiding (Word)
 > import SEL4.Config
 > import SEL4.Machine.Hardware
 > import SEL4.Machine.RegisterSet(PPtr(..), Word)
@@ -240,7 +240,7 @@ This module uses the C preprocessor to select a target architecture.
 >     return $ rTime (refillHd sc) <= curTime + kernelWCETTicks
 
 > refillReady :: PPtr SchedContext -> Kernel Bool
-> refillReady scPtr = read (readRefillReady scPtr)
+> refillReady scPtr = getsJust (readRefillReady scPtr)
 
 > refillUpdate :: PPtr SchedContext -> Ticks -> Ticks -> Int -> Kernel ()
 > refillUpdate scPtr newPeriod newBudget newMaxRefills = do
