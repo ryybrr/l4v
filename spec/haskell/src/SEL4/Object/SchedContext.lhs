@@ -16,13 +16,13 @@ This module uses the C preprocessor to select a target architecture.
 
 > module SEL4.Object.SchedContext (
 >         schedContextUnbindAllTCBs, invokeSchedContext,
->         invokeSchedControlConfigure, getSchedContext,
+>         invokeSchedControlConfigure, getSchedContext, readSchedContext,
 >         schedContextUnbindTCB, schedContextBindTCB, schedContextResume,
 >         setSchedContext, updateTimeStamp, commitTime, rollbackTime,
 >         refillHd, refillTl, minBudget, minBudgetUs, refillCapacity, refillBudgetCheck,
 >         refillBudgetCheckRoundRobin, updateScPtr, emptyRefill, scBitsFromRefillLength,
 >         isCurDomainExpired, refillUnblockCheck, mapScPtr,
->         refillReady, tcbReleaseEnqueue, tcbReleaseDequeue, refillSufficient, postpone,
+>         readRefillReady, refillReady, tcbReleaseEnqueue, tcbReleaseDequeue, refillSufficient, postpone,
 >         schedContextDonate, maybeDonateSc, maybeReturnSc, schedContextUnbindNtfn,
 >         schedContextMaybeUnbindNtfn, isRoundRobin, getRefills, setRefills, refillFull,
 >         schedContextCompleteYieldTo, schedContextUnbindYieldFrom,
@@ -33,7 +33,7 @@ This module uses the C preprocessor to select a target architecture.
 
 \begin{impdetails}
 
-> import Prelude hiding (Word)
+> import Prelude hiding (Word, read)
 > import SEL4.Config
 > import SEL4.Machine.Hardware
 > import SEL4.Machine.RegisterSet(PPtr(..), Word)
@@ -42,7 +42,7 @@ This module uses the C preprocessor to select a target architecture.
 > import {-# SOURCE #-} SEL4.Kernel.VSpace(lookupIPCBuffer)
 > import SEL4.Model.Failures
 > import SEL4.Model.Preemption(KernelP, withoutPreemption)
-> import SEL4.Model.PSpace(getObject, setObject)
+> import SEL4.Model.PSpace(getObject, readObject, setObject)
 > import SEL4.Model.StateData
 > import {-# SOURCE #-} SEL4.Object.Notification
 > import {-# SOURCE #-} SEL4.Object.Reply
@@ -66,6 +66,9 @@ This module uses the C preprocessor to select a target architecture.
 
 > getSchedContext :: PPtr SchedContext -> Kernel SchedContext
 > getSchedContext = getObject
+
+> readSchedContext :: PPtr SchedContext -> KernelR SchedContext
+> readSchedContext = readObject
 
 > setSchedContext :: PPtr SchedContext -> SchedContext -> Kernel ()
 > setSchedContext = setObject
@@ -230,11 +233,14 @@ This module uses the C preprocessor to select a target architecture.
 >     setRefillHd scPtr (Refill { rTime = curTime, rAmount = budget })
 >     maybeAddEmptyTail scPtr
 
-> refillReady :: PPtr SchedContext -> Kernel Bool
-> refillReady scPtr = do
->     sc <- getSchedContext scPtr
->     curTime <- getCurTime
+> readRefillReady :: PPtr SchedContext -> KernelR Bool
+> readRefillReady scPtr = do
+>     sc <- readSchedContext scPtr
+>     curTime <- readCurTime
 >     return $ rTime (refillHd sc) <= curTime + kernelWCETTicks
+
+> refillReady :: PPtr SchedContext -> Kernel Bool
+> refillReady scPtr = read (readRefillReady scPtr)
 
 > refillUpdate :: PPtr SchedContext -> Ticks -> Ticks -> Int -> Kernel ()
 > refillUpdate scPtr newPeriod newBudget newMaxRefills = do

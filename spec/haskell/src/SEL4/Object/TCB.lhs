@@ -61,6 +61,7 @@ This module uses the C preprocessor to select a target architecture.
 > import Data.Maybe(fromJust)
 > import Data.WordLib
 > import Control.Monad.State(runState)
+> import Control.Monad.Reader(runReader)
 
 \end{impdetails}
 
@@ -935,8 +936,11 @@ This function will return a physical pointer to a thread's IPC buffer slot, used
 The following two trivial functions will get or set a given field of a
 TCB, using a pointer to the TCB.
 
+> threadRead :: (TCB -> a) -> PPtr TCB -> KernelR a
+> threadRead f tptr = liftM f $ readObject tptr
+
 > threadGet :: (TCB -> a) -> PPtr TCB -> Kernel a
-> threadGet f tptr = liftM f $ getObject tptr
+> threadGet f tptr = read (threadRead f tptr)
 
 > threadSet :: (TCB -> TCB) -> PPtr TCB -> Kernel ()
 > threadSet f tptr = do
@@ -1064,18 +1068,17 @@ On some architectures, the thread context may include registers that may be modi
 >         commitTime
 >     setCurSc csc
 
-> getTCBRefillReady :: PPtr TCB -> Kernel Bool
-> getTCBRefillReady tcbPtr = do
->      scOpt <- threadGet tcbSchedContext tcbPtr
->      ready <- refillReady $ fromJust scOpt
->      return ready
+> readTCBRefillReady :: PPtr TCB -> KernelR Bool
+> readTCBRefillReady tcbPtr = do
+>      scOpt <- threadRead tcbSchedContext tcbPtr
+>      readRefillReady $ fromJust scOpt
 
-> releaseQNonEmptyAndReady :: Kernel Bool
+> releaseQNonEmptyAndReady :: KernelR Bool
 > releaseQNonEmptyAndReady = do
->     rq <- getReleaseQueue
+>     rq <- readReleaseQueue
 >     if rq == []
 >       then return False
->       else getTCBRefillReady (head rq)
+>       else readTCBRefillReady (head rq)
 
 > awakenBody :: Kernel ()
 > awakenBody = do
@@ -1087,7 +1090,7 @@ On some architectures, the thread context may include registers that may be modi
 >     possibleSwitchTo awakened
 
 > awaken :: Kernel ()
-> awaken = whileLoop (\r s -> funOfM releaseQNonEmptyAndReady) (\r -> awaken_body) ()
+> awaken = whileLoop (const (runReader releaseQNonEmptyAndReady)) (const awakenBody) ()
 
 > tcbEPFindIndex :: PPtr TCB -> [PPtr TCB] -> Int -> Kernel Int
 > tcbEPFindIndex tptr queue curIndex = do
