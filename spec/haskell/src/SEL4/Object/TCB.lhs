@@ -34,7 +34,7 @@ This module uses the C preprocessor to select a target architecture.
 % {-# BOOT-IMPORTS: SEL4.API.Types SEL4.API.Failures SEL4.Machine SEL4.Model SEL4.Object.Structures SEL4.API.Invocation #-}
 % {-# BOOT-EXPORTS: threadGet threadSet asUser setMRs setMessageInfo getThreadCSpaceRoot getThreadVSpaceRoot decodeTCBInvocation invokeTCB getThreadBufferSlot decodeDomainInvocation archThreadSet archThreadGet sanitiseRegister decodeSchedContextInvocation decodeSchedControlInvocation checkBudget chargeBudget replaceAt tcbEPAppend tcbEPDequeue setTimeArg #-}
 
-> import Prelude hiding (Word)
+> import Prelude hiding (Word, read)
 > import SEL4.Config
 > import SEL4.API.Types
 > import SEL4.API.Failures
@@ -61,7 +61,7 @@ This module uses the C preprocessor to select a target architecture.
 > import Data.Maybe(fromJust)
 > import Data.WordLib
 > import Control.Monad.State(runState)
-> import Control.Monad.Reader(runReader)
+> import Control.Monad.Reader(runReaderT)
 
 \end{impdetails}
 
@@ -1090,7 +1090,7 @@ On some architectures, the thread context may include registers that may be modi
 >     possibleSwitchTo awakened
 
 > awaken :: Kernel ()
-> awaken = whileLoop (const (runReader releaseQNonEmptyAndReady)) (const awakenBody) ()
+> awaken = whileLoop (const (fromJust . runReaderT releaseQNonEmptyAndReady)) (const awakenBody) ()
 
 > tcbEPFindIndex :: PPtr TCB -> [PPtr TCB] -> Int -> Kernel Int
 > tcbEPFindIndex tptr queue curIndex = do
