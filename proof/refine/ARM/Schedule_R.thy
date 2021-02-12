@@ -3417,8 +3417,7 @@ lemma refillReady_corres:
                                   and active_sc_valid_refills) valid_objs'
               (get_sc_refill_ready sc_ptr) (refillReady scPtr)"
   apply (rule corres_cross[where Q' = "sc_at' scPtr", OF sc_at'_cross_rel], simp)
-  apply (clarsimp simp: get_sc_refill_ready_def refill_ready_def refillReady_def
- readRefillReady_def)
+  apply (clarsimp simp: get_sc_refill_ready_def refill_ready_def refillReady_def readRefillReady_def)
   apply (rule corres_guard_imp)
     apply (rule corres_split[OF _ get_sc_corres_read])
       apply (rename_tac sc sc')
@@ -3427,16 +3426,15 @@ lemma refillReady_corres:
         apply (rename_tac s s')
         apply (prop_tac "r_time (refill_hd sc) = rTime (refillHd sc')")
          apply (rule_tac s'=s' in refills_heads_equal_active[THEN conjunct2, symmetric])
-            apply (erule conjunct1)
-           apply (erule conjunct2)
-          apply blast
-         apply (simp only:)
-        apply wpsimp+
-apply (frule active_sc_valid_refillsE[rotated])
-apply (fastforce simp: is_sc_active_kh_simp)
-thm valid_refills_def
-apply (clarsimp simp: valid_refills_def obj_at_kh_kheap_simps vs_all_heap_simps
-rr_valid_refills_def split: if_split_asm)
+           apply (erule conjunct1)
+          apply (erule conjunct2)
+         apply blast
+        apply (simp only:)
+       apply wpsimp+
+   apply (frule active_sc_valid_refillsE[rotated])
+    apply (fastforce simp: is_sc_active_kh_simp)
+   apply (clarsimp simp: valid_refills_def obj_at_kh_kheap_simps vs_all_heap_simps
+   rr_valid_refills_def split: if_split_asm)
   apply (fastforce dest: sc_ko_at_valid_objs_valid_sc' simp: readSchedContext_def)
   done
 
@@ -3491,13 +3489,41 @@ lemma no_fail_r_readRefillReady[simp]:
    apply simp+
   done
 
-lemma readRefillReady_corres:
-  "\<lbrakk>(s, s') \<in> state_relation; (valid_objs) s; valid_objs' s'; sc_at scp s\<rbrakk> \<Longrightarrow>
+lemma no_ofail_obind [wp]:
+  "\<lbrakk> \<And>r. no_fail_r (P r) (g r); no_fail_r Q f; ovalid Q f P \<rbrakk> \<Longrightarrow> no_fail_r Q (obind f g)"
+  by (fastforce simp: no_fail_r_def obind_def)
+
+lemma no_fail_r_readTCBRefillReady[simp]:
+  "no_fail_r ((\<lambda>s'. obj_at' (\<lambda>tcb. \<exists>sc. tcbSchedContext tcb = Some sc \<and> sc_at' sc s') t s')) (readTCBRefillReady t)"
+  apply (clarsimp simp: readTCBRefillReady_def)
+apply wp
+ apply (rule no_fail_r_readRefillReady)
+apply (rule no_fail_r_pre)
+apply (rule no_fail_r_threadRead)
+apply (erule obj_at'_weakenE)
+apply simp
+apply (clarsimp simp: obj_at'_def projectKOs)
+
+apply (clarsimp simp: dest!: threadRead_tcb_at')
+
+  apply simp
+     apply (rule no_fail_r_bind[rotated -1], rule allI)
+       apply wp
+      apply (rule no_fail_r_readRefillReady)
+     apply clarsimp
+    apply wp
+   apply simp+
+  done
+
+lemma readRefillReady_simp:
+  "\<lbrakk>(s, s') \<in> state_relation; (valid_objs) s; valid_objs' s'; sc_at scp s; sc_at' scp s';
+is_active_sc scp s;
+        active_sc_valid_refills s\<rbrakk> \<Longrightarrow>
   the (fun_of_m (get_sc_refill_ready scp) s) = the (readRefillReady scp s')"
   apply (prop_tac "bound (fun_of_m (get_sc_refill_ready scp) s)")
-  subgoal sorry
+  using fun_of_m_get_sc_refill_ready_Some apply blast
   apply (prop_tac "bound (readRefillReady scp s')")
-  subgoal sorry
+   apply (clarsimp dest!: no_fail_rD[OF no_fail_r_readRefillReady])
   apply (frule no_fail_rD[OF no_fail_r_readSchedContext])
   apply (clarsimp simp: obj_at_def)
   apply (clarsimp simp: get_tcb_refill_ready_def fun_of_m_def readRefillReady_def
@@ -3507,10 +3533,16 @@ lemma readRefillReady_corres:
                         readCurTime_def asks_def obj_at_simps is_sc_obj
                  dest!: readObject_sc_at'
                  split: if_split_asm option.split_asm Structures_A.kernel_object.split_asm)
-  apply (prop_tac "cur_time s = ksCurTime s'") subgoal sorry
+  apply (prop_tac "cur_time s = ksCurTime s'")
+apply (clarsimp dest!: state_relationD)
   apply (drule state_relation_pspace_relation, clarsimp)
   apply (drule (1) pspace_relation_absD[rotated], clarsimp)
-  apply (prop_tac "sc_refills sc \<noteq> []") subgoal sorry
+  apply (prop_tac "sc_refills sc \<noteq> []")
+thm  active_sc_valid_refillsE[rotated, simplified]
+apply (fastforce dest!: active_sc_valid_refillsE simp:
+valid_refills_def obj_at_kh_kheap_simps vs_all_heap_simps
+rr_valid_refills_def split: if_split_asm)
+
   apply (frule refills_heads_equal)
    apply (erule (1) valid_objsE')
    apply (clarsimp simp: valid_obj'_def)
@@ -3525,23 +3557,20 @@ lemma readTCBRefillReady_simp:
                               and valid_objs
                               and active_sc_tcb_at t
                               and active_sc_valid_refills) s; valid_objs' s'\<rbrakk> \<Longrightarrow>
-  fun_of_m (get_tcb_refill_ready t) s = readTCBRefillReady t s'"
+  the (fun_of_m (get_tcb_refill_ready t) s) = the (readTCBRefillReady t s')"
+  apply (prop_tac "bound_sc_tcb_at bound t s")
+  apply (clarsimp simp: obj_at_kh_kheap_simps vs_all_heap_simps)
+  apply (prop_tac "bound (fun_of_m (get_tcb_refill_ready t) s)")
+  using fun_of_m_get_tcb_refill_ready_Some apply blast
+  apply (prop_tac "bound (readTCBRefillReady t s')")
+   apply (clarsimp dest!: no_fail_rD[OF no_fail_r_readTCBRefillReady])
+  apply (frule no_fail_rD[OF no_fail_r_readSchedContext])
+  apply (clarsimp simp: obj_at_def)
   supply if_split[split del]
- apply (simp add: get_tcb_refill_ready_simp2)
-  apply (clarsimp simp: fun_of_m_def readTCBRefillReady_def obind_def)
-  apply (clarsimp simp: fun_of_m_def readTCBRefillReady_def obind_def split_def
-oliftM_def get_tcb_refill_ready_def get_tcb_obj_ref_def gets_the_def gets_def
-assert_opt_def fail_def return_def thread_get_def in_monad get_tcb_def get_def
-bind_def
-split: option.splits kernel_object.split)
-  apply (clarsimp simp: get_tcb_refill_ready_def get_tcb_obj_ref_def obind_def
-                        readTCBRefillReady_def threadGet_def[symmetric]
-
-split: option.splits
-)
-apply safe
-
-
+ apply (subst get_tcb_refill_ready_simp2)
+apply (fastforce simp: active_sc_tcb_at_def2)
+sorry
+(*
   apply (rule corres_guard_imp)
     apply (rule_tac Q="?abs" and Q'="?conc"
                  in corres_split[OF _ threadget_corres[where r="(=)"] thread_get_sp threadGet_inv])
@@ -3564,6 +3593,7 @@ apply safe
    apply (fastforce intro: valid_sched_context_size_objsI
                      simp: obj_at_def vs_all_heap_simps is_sc_obj_def)
   apply (clarsimp simp: no_fail_def obj_at_def return_def vs_all_heap_simps)
+*)
 
 lemma readTCBRefillReady_corres:
   "corres (=) (pspace_aligned and pspace_distinct
@@ -3615,14 +3645,28 @@ lemma readReleaseQueue_corres:
     apply (rule corres_gets_the')
   by (auto simp: state_relation_def)
 
-lemma
-  "(s, s') \<in> state_relation
-   \<Longrightarrow> fun_of_m release_q_non_empty_and_ready s =  releaseQNonEmptyAndReady s'"
-  apply (frule state_relation_release_queue_relation[simplified release_queue_relation_def])
-  apply (clarsimp simp: fun_of_m_def release_q_non_empty_and_ready_def
-releaseQNonEmptyAndReady_def exec_gets
-)
-thm readTCBRefillReady_corres[simplified corres_underlying_def]
+lemma releaseQNonEmptyAndReady_simp:
+  "\<lbrakk>pspace_aligned s; pspace_distinct s;
+     valid_objs s; valid_release_q s;
+     active_sc_valid_refills s; valid_objs' s'\<rbrakk>
+   \<Longrightarrow> the (fun_of_m release_q_non_empty_and_ready s) =
+           the (releaseQNonEmptyAndReady s')"
+  apply (clarsimp simp: release_q_non_empty_and_ready_def releaseQNonEmptyAndReady_def
+fun_of_m_def obind_def
+split del: if_split)
+apply (
+  apply (rule corres_guard_imp)
+    apply (rule corres_split[OF _ readReleaseQueue_corres])
+      apply (rule_tac P="pspace_aligned and pspace_distinct and valid_objs and valid_release_q
+                         and active_sc_valid_refills and (\<lambda>s. rq = release_queue s)" in corres_inst)
+      apply (case_tac "rq = []"; simp add: release_queue_relation_def)
+      apply (rule corres_guard_imp)
+        apply (rule readTCBRefillReady_corres)
+       apply wpsimp+
+       apply (erule valid_release_q_active_sc)
+       apply (case_tac "release_queue s"; simp)
+      apply simp
+     by wpsimp+
 
 lemma releaseQNonEmptyAndReady_corres:
   "corres (=) (pspace_aligned and pspace_distinct
@@ -4055,7 +4099,7 @@ lemma awaken_body_corres:
       apply (rule corres_symb_exec_r)
          apply (rule corres_symb_exec_r)
             apply clarsimp
-            apply (rule possible_switch_to_corres)
+            apply (rule possibleSwitchTo_corres)
            apply (rule assert_drop)
           apply wpsimp
          apply wpsimp
@@ -4181,10 +4225,10 @@ lemma awaken_corres:
                            , OF release_q_runnable_cross_rel], blast)
   apply (rule corres_cross[where Q'="\<lambda>s'. distinct (ksReleaseQueue s')"
                            , OF distinct_release_queue_cross_rel], blast)
-  apply (clarsimp simp: awaken_def Schedule_A.awaken_def)
+  apply (clarsimp simp: awaken_def Schedule_A.awaken_def runReaderT_def)
   apply (rule corres_whileLoop; simp)
-              apply (rule releaseQNonEmptyAndReady_corres)
-             apply simp
+              apply (simp add: releaseQNonEmptyAndReady_simp)
+(*             apply simp
             apply simp
            apply simp
           apply (fastforce intro: no_fail_pre release_q_non_empty_and_ready_no_fail)
@@ -4192,6 +4236,7 @@ lemma awaken_corres:
         apply (fastforce intro: releaseQNonEmptyAndReady_one_branching one_branching_weaken)
        apply (fastforce intro: releaseQNonEmptyAndReady_empty_fail)
 subgoal sorry
+*)
       apply (rule corres_guard_imp)
         apply (rule awaken_body_corres)
        apply (fastforce dest: release_q_non_empty_and_ready_fun_of_m)
@@ -4201,7 +4246,7 @@ subgoal sorry
             ; (solves \<open>wpsimp simp: Schedule_A.awaken_body_def tcb_release_dequeue_def\<close>)?)
      apply (wpsimp wp: awaken_body_valid_sched_action)
      apply (fastforce dest: release_q_non_empty_and_ready_fun_of_m)
-    apply (wpsimp simp: awakenBody_def
+    apply (wpsimp simp: awakenBody_def runReaderT_def
                     wp: hoare_vcg_ball_lift2 tcbReleaseDequeue_dequeue_inv hoare_drop_imps)
     apply (fastforce dest: releaseQNonEmptyAndReady_implies_releaseQNonEmpty)
    apply (fastforce intro: no_fail_pre awaken_body_no_fail
@@ -4290,7 +4335,7 @@ lemma schedule_corres:
                              (* isHighestPrio *)
                              apply (clarsimp simp: if_apply_def2)
                              apply ((wp (once) hoare_drop_imp)+)[1]
-
+ML {* PolyML.fullGC () *}
                             apply (simp add: if_apply_def2)
                              apply ((wp (once) hoare_drop_imp)+)[1]
                            apply wpsimp+
