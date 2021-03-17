@@ -65,7 +65,7 @@ lemma empty_slot_irq_masks:
    empty_slot slot irq_opt
    \<lbrace>\<lambda>_ s. P (irq_masks_of_state s)\<rbrace>"
   apply(rule hoare_gen_asm)
-  apply(simp add: empty_slot_def | wp)+
+  apply(simp add: empty_slot_def post_cap_deletion_def | wp)+
   done
 
 crunch irq_masks[wp]: do_reply_transfer "\<lambda>s. P (irq_masks_of_state s)"
