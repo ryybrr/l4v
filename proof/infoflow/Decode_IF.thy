@@ -58,15 +58,7 @@ lemma decode_untyped_invocation_rev:
                         | simp
                         | wp (once) hoare_drop_imps)+
   apply(clarify, drule_tac x="excaps ! 0" in bspec, fastforce intro: bang_0_in_set)
-  apply safe
-     apply(drule (1) is_cnode_into_is_subject)
-     apply(erule (1) impE)
-     apply(fastforce elim: prop_of_obj_ref_of_cnode_cap)
-    apply(fastforce dest: is_cnode_into_is_subject)
-   apply(drule (1) is_cnode_into_is_subject)
-   apply(erule (1) impE)
-   apply(fastforce elim: prop_of_obj_ref_of_cnode_cap)
-  apply(fastforce dest: is_cnode_into_is_subject)
+  apply(auto dest: is_cnode_into_is_subject elim: prop_of_obj_ref_of_cnode_cap)
   done
 
 lemma derive_cap_rev':
@@ -119,9 +111,12 @@ lemma decode_cnode_invocation_rev:
         | wpc
         | (wp (once) hoare_drop_imps, wp (once) lookup_slot_for_cnode_op_authorised)
         | strengthen aag_can_read_self)+)
-   apply(auto dest: bspec[where x="excaps ! 0"] bspec[where x="excaps ! Suc 0"]
-              intro: nth_mem elim: prop_of_obj_ref_of_cnode_cap
-              dest!: is_cnode_into_is_subject simp: expand_len_gr_Suc_0)
+  apply clarsimp
+  apply (cases excaps; cases "tl excaps"; clarsimp)
+    apply (auto dest: bspec[where x="excaps ! 0"] bspec[where x="excaps ! Suc 0"]
+                      is_cnode_into_is_subject
+               intro: nth_mem elim: prop_of_obj_ref_of_cnode_cap
+               simp: expand_len_gr_Suc_0)
   done
 
 lemma range_check_ev:
@@ -309,9 +304,7 @@ lemma arch_decode_irq_control_invocation_rev:
     apply(blast intro: aag_Control_into_owns_irq )
    apply(drule_tac x="caps ! 0" in bspec)
     apply(fastforce intro: bang_0_in_set)
-   apply(drule (1) is_cnode_into_is_subject)
-   apply(erule (1) impE)
-   apply(blast dest: prop_of_obj_ref_of_cnode_cap)
+   apply(drule (1) is_cnode_into_is_subject; blast dest: prop_of_obj_ref_of_cnode_cap)
   apply(fastforce dest: is_cnode_into_is_subject intro: bang_0_in_set)
   done
 
@@ -332,9 +325,7 @@ lemma decode_irq_control_invocation_rev:
     apply(blast intro: aag_Control_into_owns_irq )
    apply(drule_tac x="caps ! 0" in bspec)
     apply(fastforce intro: bang_0_in_set)
-   apply(drule (1) is_cnode_into_is_subject)
-   apply(erule (1) impE)
-   apply(blast dest: prop_of_obj_ref_of_cnode_cap)
+   apply(drule (1) is_cnode_into_is_subject; blast dest: prop_of_obj_ref_of_cnode_cap)
   apply(fastforce dest: is_cnode_into_is_subject intro: bang_0_in_set)
   done
 

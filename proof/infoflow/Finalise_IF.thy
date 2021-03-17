@@ -48,7 +48,7 @@ lemma empty_slot_reads_respects:
   notes split_paired_All[simp del] split_paired_Ex[simp del]
   shows
   "reads_respects aag l (K (aag_can_read aag (fst slot))) (empty_slot slot free_irq)"
-  unfolding empty_slot_def fun_app_def
+  unfolding empty_slot_def post_cap_deletion_def fun_app_def
   apply (simp add: bind_assoc[symmetric] cong: if_cong)
   apply (fold update_cdt_def)
   apply (simp add: bind_assoc empty_slot_ext_def cong: if_cong)
@@ -1826,7 +1826,7 @@ lemma transfer_caps_valid_ko_at_arm[wp]:
 
 lemma empty_slot_globals_equiv:
   "\<lbrace>globals_equiv st and valid_ko_at_arm\<rbrace> empty_slot s b\<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
-  unfolding empty_slot_def
+  unfolding empty_slot_def post_cap_deletion_def
   by (wpsimp wp: set_cap_globals_equiv'' set_original_globals_equiv hoare_vcg_if_lift2
                  set_cdt_globals_equiv dxo_wp_weak hoare_drop_imps hoare_vcg_all_lift)
 

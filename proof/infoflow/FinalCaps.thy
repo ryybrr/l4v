@@ -1235,7 +1235,7 @@ lemma empty_slot_silc_inv:
   "\<lbrace>silc_inv aag st and K (pasObjectAbs aag (fst slot) \<noteq> SilcLabel)\<rbrace>
    empty_slot slot free_irq
    \<lbrace>\<lambda>_. silc_inv aag st\<rbrace>"
-  unfolding empty_slot_def
+  unfolding empty_slot_def post_cap_deletion_def
   apply(wp set_cap_silc_inv hoare_vcg_all_lift hoare_vcg_ex_lift
            slots_holding_overlapping_caps_lift get_cap_wp
            set_cdt_silc_inv dxo_wp_weak hoare_drop_imps
