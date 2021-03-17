@@ -315,7 +315,7 @@ lemma empty_slot_domain_sep_inv:
   "\<lbrace>\<lambda>s. domain_sep_inv irqs st s \<and> (\<not> irqs \<longrightarrow> b = NullCap)\<rbrace>
    empty_slot a b
    \<lbrace>\<lambda>_ s. domain_sep_inv irqs st s\<rbrace>"
-  unfolding empty_slot_def
+  unfolding empty_slot_def post_cap_deletion_def
   by (wpsimp wp: get_cap_wp set_cap_domain_sep_inv set_original_wp dxo_wp_weak static_imp_wp
                  deleted_irq_handler_domain_sep_inv)
 

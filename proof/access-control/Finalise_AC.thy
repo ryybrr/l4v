@@ -109,7 +109,7 @@ lemma cancel_badged_sends_respects[wp]:
   apply (rule hoare_gen_asm)
   apply (simp add: cancel_badged_sends_def filterM_mapM
              cong: Structures_A.endpoint.case_cong)
-  apply (wp set_endpoinintegrity | wpc | simp)+
+  apply (wp set_endpoint_respects | wpc | simp)+
      apply (rule mapM_mapM_x_valid[THEN iffD1])
      apply (simp add: exI[where x=Reset])
      apply (rule mapM_x_inv_wp2[where Q="P" and I="P" and
@@ -122,7 +122,7 @@ lemma cancel_badged_sends_respects[wp]:
       apply (wp sts_respects_restart_ep hoare_vcg_const_Ball_lift sts_st_tcb_at_neq)
      apply clarsimp
      apply fastforce
-    apply (wp set_endpoinintegrity hoare_vcg_const_Ball_lift get_simple_ko_wp)+
+    apply (wp set_endpoint_respects hoare_vcg_const_Ball_lift get_simple_ko_wp)+
   apply clarsimp
   apply (frule(1) sym_refs_ko_atD)
   apply (frule ko_at_state_refs_ofD)
@@ -143,7 +143,7 @@ lemma cancel_all_ipc_respects [wp]:
   apply (wp mapM_x_inv_wp2[
                   where I = "integrity aag X st"
                     and V = "\<lambda>q s. distinct q \<and> (\<forall>x \<in> set q. st_tcb_at (blocked_on epptr) x s)"]
-            sts_respects_restart_ep sts_st_tcb_at_neq hoare_vcg_ball_lift set_endpoinintegrity
+            sts_respects_restart_ep sts_st_tcb_at_neq hoare_vcg_ball_lift set_endpoint_respects
             get_simple_ko_wp
         | wpc
         | clarsimp
@@ -526,7 +526,7 @@ lemma cancel_ipc_respects[wp]:
   apply (simp add: cancel_ipc_def)
   apply (rule hoare_seq_ext[OF _ gts_sp])
   apply (rule hoare_pre)
-   apply (wp set_thread_state_integrity_autarch set_endpoinintegrity get_simple_ko_wp
+   apply (wp set_thread_state_integrity_autarch set_endpoint_respects get_simple_ko_wp
          | wpc
          | simp(no_asm) add: blocked_cancel_ipc_def get_ep_queue_def get_blocking_object_def)+
   apply clarsimp
@@ -821,8 +821,8 @@ next
         apply (rule finalise_cap_cases[where slot=slot])
        apply (clarsimp simp: cte_wp_at_caps_of_state)
        apply (erule disjE)
-        apply (clarsimp split: cap.split_asm)
-        apply(fastforce intro: owns_slot_owns_irq)
+        apply (clarsimp simp: cap_cleanup_opt_def split: cap.split_asm)
+        apply (fastforce intro: owns_slot_owns_irq)
        apply (clarsimp simp: is_cap_simps cap_auth_conferred_def clas_no_asid aag_cap_auth_def
                              pas_refined_all_auth_is_owns cli_no_irqs)
        apply (drule appropriate_Zombie[symmetric, THEN trans, symmetric])
