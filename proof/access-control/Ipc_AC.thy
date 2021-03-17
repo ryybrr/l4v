@@ -1676,7 +1676,7 @@ lemma cap_insert_integrity_autarch_not_untyped:
    cap_insert cap src_slot dest_slot
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   apply (simp add:cap_insert_def)
-  apply (wp set_original_integrity_autarch cap_insert_ext_extended.list_integ_lift
+  apply (wp set_original_integrity_autarch cap_insert_extended.list_integ_lift
             cap_insert_list_integrity update_cdt_fun_upd_integrity_autarch gets_inv
             set_cap_integrity_autarch set_untyped_cap_as_full_not_untyped assert_inv)
   apply fastforce
@@ -1742,7 +1742,7 @@ lemma receive_ipc_base_integrity:
   apply (rule hoare_gen_asm)
   apply (clarsimp simp: thread_get_def get_thread_state_def cong: endpoint.case_cong)
   apply (rule hoare_pre)
-   apply (wp set_endpoinintegrity set_thread_state_running_respects
+   apply (wp set_endpoint_respects set_thread_state_running_respects
              setup_caller_cap_integrity_recv[where ep = epptr]
              do_ipc_transfer_integrity_autarch
              set_thread_state_integrity_autarch[where param_a=receiver]
@@ -1763,7 +1763,7 @@ lemma receive_ipc_base_integrity:
                                 allowed_call_blocked_def
                          dest!: get_tcb_SomeD
                          elim: pred_tcb_atI)
-        apply (wp do_ipc_transfer_integrity_autarch do_ipc_transfer_pred_tcb set_endpoinintegrity
+        apply (wp do_ipc_transfer_integrity_autarch do_ipc_transfer_pred_tcb set_endpoint_respects
                   get_simple_ko_wp
                   set_thread_state_integrity_autarch[where param_a=receiver]
                   hoare_vcg_imp_lift [OF set_simple_ko_get_tcb, unfolded disj_not1]
@@ -2358,7 +2358,7 @@ lemma set_thread_state_running_respects_in_ipc:
               elim: update_tcb_state_in_ipc[unfolded fun_upd_def])
   done
 
-lemma set_endpoinintegrity_in_ipc:
+lemma set_endpoint_integrity_in_ipc:
   "\<lbrace>integrity_tcb_in_ipc aag X receiver epptr TRContext st
           and K (aag_has_auth_to aag SyncSend epptr)\<rbrace>
     set_endpoint epptr ep'
@@ -2575,13 +2575,13 @@ lemma send_ipc_integrity_autarch:
     \<comment> \<open>IdleEP\<close>
     apply simp
     apply (rule hoare_pre)
-     apply (wp set_endpoinintegrity  set_thread_state_integrity_autarch
+     apply (wp set_endpoint_respects  set_thread_state_integrity_autarch
                  | wpc | simp)+
     apply (fastforce simp: obj_at_def is_ep) \<comment> \<open>ep_at and has_auth\<close>
    \<comment> \<open>SendEP\<close>
    apply simp
    apply (rule hoare_pre)
-    apply (wp set_endpoinintegrity  set_thread_state_integrity_autarch
+    apply (wp set_endpoint_respects  set_thread_state_integrity_autarch
                | wpc | simp)+
    apply (fastforce simp: obj_at_def is_ep) \<comment> \<open>ep_at and has_auth\<close>
   \<comment> \<open>WaitingEP\<close>
@@ -2597,7 +2597,7 @@ lemma send_ipc_integrity_autarch:
           apply simp+
           apply (wp set_thread_state_integrity_autarch thread_get_wp'
                     do_ipc_transfer_integrity_autarch
-                    hoare_vcg_all_lift hoare_drop_imps set_endpoinintegrity
+                    hoare_vcg_all_lift hoare_drop_imps set_endpoint_respects
                    | wpc | simp add: get_thread_state_def split del: if_split
                                 del: hoare_True_E_R)+
    apply (fastforce simp: a_type_def obj_at_def is_ep elim: send_ipc_valid_ep_helper)
@@ -2615,7 +2615,7 @@ lemma send_ipc_integrity_autarch:
              set_thread_state_respects_in_ipc_autarch[where param_b = Inactive]
              hoare_vcg_if_lift static_imp_wp possible_switch_to_respects_in_ipc_autarch
              set_thread_state_running_respects_in_ipc do_ipc_transfer_respects_in_ipc thread_get_inv
-             set_endpoinintegrity_in_ipc
+             set_endpoint_integrity_in_ipc
           | wpc
           | strengthen integrity_tcb_in_ipc_no_call
           | wp hoare_drop_imps
@@ -2932,7 +2932,8 @@ lemma empty_slot_respects_in_ipc_autarch:
     and cte_wp_at is_reply_cap slot and K (is_subject aag (fst slot))\<rbrace>
      empty_slot slot NullCap
    \<lbrace>\<lambda>_. integrity_tcb_in_ipc aag X receiver epptr ctxt st\<rbrace>"
-  unfolding empty_slot_def apply simp
+  unfolding empty_slot_def post_cap_deletion_def
+  apply simp
   apply (wp add: set_cap_respects_in_ipc_autarch set_original_respects_in_ipc_autarch)
        apply (wp empty_slot_extended.list_integ_lift_in_ipc empty_slot_list_integrity')
           apply simp

@@ -5,7 +5,7 @@
  *)
 
 theory Retype_AC
-imports CNode_AC
+imports ArchCNode_AC
 begin
 
 context begin interpretation Arch . (*FIXME: arch_split*)

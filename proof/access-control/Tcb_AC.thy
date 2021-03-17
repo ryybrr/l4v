@@ -503,7 +503,7 @@ lemma decode_set_ipc_buffer_authorised:
   "\<lbrace>K (is_subject aag t \<and> (\<forall>x \<in> set excaps. is_subject aag (fst (snd x)))
                       \<and> (\<forall>x \<in> set excaps. pas_cap_cur_auth aag (fst x))) \<rbrace>
     decode_set_ipc_buffer msg (cap.ThreadCap t) slot excaps
-   \<lbrace>\<lambda>rv s. authorised_tcb_inv aag rv\<rbrace>, -"
+   \<lbrace>\<lambda>rv s :: det_ext state. authorised_tcb_inv aag rv\<rbrace>, -"
   unfolding decode_set_ipc_buffer_def authorised_tcb_inv_def
   apply (cases "excaps ! 0")
   apply (clarsimp cong: list.case_cong split del: if_split)
@@ -521,7 +521,7 @@ lemma decode_set_space_authorised:
   "\<lbrace>K (is_subject aag t \<and> (\<forall>x \<in> set excaps. is_subject aag (fst (snd x)))
                       \<and> (\<forall>x \<in> set excaps. pas_cap_cur_auth aag (fst x))) \<rbrace>
      decode_set_space ws (cap.ThreadCap t) slot excaps
-   \<lbrace>\<lambda>rv s. authorised_tcb_inv aag rv\<rbrace>, -"
+   \<lbrace>\<lambda>rv s :: det_ext state. authorised_tcb_inv aag rv\<rbrace>, -"
   unfolding decode_set_space_def authorised_tcb_inv_def
   apply (rule hoare_pre)
   apply (simp cong: list.case_cong split del: if_split)
@@ -538,7 +538,7 @@ lemma decode_tcb_configure_authorised_helper:
                       \<and> (\<forall>x \<in> set excaps. pas_cap_cur_auth aag (fst x))
                       \<and> authorised_tcb_inv aag set_param \<and> is_thread_control set_param)\<rbrace>
      decode_set_space ws (cap.ThreadCap t) slot excaps
-   \<lbrace>\<lambda>rv s. authorised_tcb_inv aag (tcb_invocation.ThreadControl t slot (tc_new_fault_ep rv)
+   \<lbrace>\<lambda>rv s :: det_ext state. authorised_tcb_inv aag (tcb_invocation.ThreadControl t slot (tc_new_fault_ep rv)
                                     None None (tc_new_croot rv)
                                     (tc_new_vroot rv) (tc_new_buffer set_param))\<rbrace>, -"
   apply (rule hoare_gen_asmE)
@@ -562,7 +562,7 @@ lemma decode_tcb_configure_authorised:
   "\<lbrace>K (is_subject aag t \<and> (\<forall>x \<in> set excaps. is_subject aag (fst (snd x)))
                       \<and> (\<forall>x \<in> set excaps. pas_cap_cur_auth aag (fst x))) \<rbrace>
     decode_tcb_configure msg (cap.ThreadCap t) slot excaps
-   \<lbrace>\<lambda>rv s. authorised_tcb_inv aag rv\<rbrace>, -"
+   \<lbrace>\<lambda>rv s :: det_ext state. authorised_tcb_inv aag rv\<rbrace>, -"
   apply (wpsimp simp: decode_tcb_configure_def
                 wp: whenE_throwError_wp decode_tcb_configure_authorised_helper
                     decode_set_ipc_buffer_authorised)
