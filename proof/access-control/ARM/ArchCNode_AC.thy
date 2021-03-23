@@ -242,6 +242,7 @@ lemma aobj_ref'_same_aobject[CNode_AC_3_assms]:
 
 end
 
+(* FIXME ryanb: Arch interpretation not needed *)
 context is_extended begin
 
 interpretation Arch . (*FIXME: arch_split*)
