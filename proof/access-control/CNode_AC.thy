@@ -446,6 +446,18 @@ context CNode_AC_1 begin
 
 crunch respects[wp]: deleted_irq_handler "integrity aag X st"
 
+context begin interpretation Arch .
+
+(* FIXME ryanb: arch_split *)
+
+lemma arch_post_cap_deletion_integrity:
+  "\<lbrace>integrity aag X s \<rbrace> arch_post_cap_deletion x12 \<lbrace>\<lambda>rv. integrity aag X s\<rbrace>"
+  unfolding arch_post_cap_deletion_def
+  apply wp
+  done
+
+end
+
 lemma post_cap_deletion_integrity[wp]:
  "\<lbrace>integrity aag X s and K (cleanup_info_wf cleanup_info aag)\<rbrace>
   post_cap_deletion cleanup_info
