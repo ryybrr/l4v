@@ -437,7 +437,8 @@ lemma cdt_change_allowed_all_children:
   by (rule all_childrenI) (erule cdt_change_allowed_to_child)
 
 abbreviation cleanup_info_wf :: "cap \<Rightarrow> 'a PAS \<Rightarrow> bool" where
-  "cleanup_info_wf c aag \<equiv> c \<noteq> NullCap \<longrightarrow> (\<exists>irq. c = (IRQHandlerCap irq) \<and> is_subject_irq aag irq)"
+  "cleanup_info_wf c aag \<equiv> c \<noteq> NullCap \<and> \<not>is_arch_cap c
+                           \<longrightarrow> (\<exists>irq. c = (IRQHandlerCap irq) \<and> is_subject_irq aag irq)"
 
 (* FIXME: MOVE *)
 named_theorems wp_transferable
@@ -448,14 +449,23 @@ context CNode_AC_1 begin
 
 crunch respects[wp]: deleted_irq_handler "integrity aag X st"
 
+context begin interpretation Arch .
+
+(* FIXME ryanb: arch_split *)
+
+lemma arch_post_cap_deletion_integrity:
+  "\<lbrace>integrity aag X s \<rbrace> arch_post_cap_deletion x12 \<lbrace>\<lambda>rv. integrity aag X s\<rbrace>"
+  unfolding arch_post_cap_deletion_def
+  apply wp
+  done
+
+end
+
 lemma post_cap_deletion_integrity[wp]:
  "\<lbrace>integrity aag X s and K (cleanup_info_wf cleanup_info aag)\<rbrace>
   post_cap_deletion cleanup_info
   \<lbrace>\<lambda>rv. integrity aag X s\<rbrace>"
-  apply (wpsimp simp: post_cap_deletion_def)
-   apply (rule hoare_pre_cont)
-  apply auto
-  done
+  by (wpsimp simp: post_cap_deletion_def is_cap_simps wp: arch_post_cap_deletion_integrity)
 
 lemma empty_slot_integrity_spec:
   notes split_paired_All[simp del]
