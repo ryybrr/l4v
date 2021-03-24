@@ -5,7 +5,7 @@
  *)
 
 theory Tcb_AC
-imports Finalise_AC
+imports ArchFinalise_AC
 begin
 
 context begin interpretation Arch . (*FIXME: arch_split*)

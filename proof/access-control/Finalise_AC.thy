@@ -8,8 +8,6 @@ theory Finalise_AC
 imports Arch_AC
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 text \<open>
 NB: the @{term is_subject} assumption is not appropriate for some of
     the scheduler lemmas. This is because a scheduler domain may have
@@ -20,6 +18,56 @@ NB: the @{term is_subject} assumption is not appropriate for some of
     assumption with a statement that the scheduled thread is in one of
     the current subject's domains.
 \<close>
+
+
+locale Finalise_AC_1 =
+  fixes aag :: "'a PAS"
+  assumes arch_integrity_ready_queues_update[simp]:
+  "\<And>f. arch_integrity_subjects subjects aag activate X st (ready_queues_update f s) =
+        arch_integrity_subjects subjects aag activate X st s"
+  and arch_integrity_irq_state_update[simp]:
+    "\<And>f. arch_integrity_subjects subjects aag activate X st
+            (s\<lparr>machine_state := machine_state s\<lparr>irq_state := f (irq_state (machine_state s))\<rparr>\<rparr>) =
+          arch_integrity_subjects subjects aag activate X st s"
+  and arch_integrity_ekheap_update[simp]:
+  "\<And>f. arch_integrity_subjects subjects aag activate X st (ekheap_update f s) =
+        arch_integrity_subjects subjects aag activate X st s"
+  and sbn_st_vrefs[wp]:
+  "\<And>P. \<lbrace>\<lambda>s :: det_ext state. P (state_vrefs s)\<rbrace>
+        set_bound_notification ref ntfn
+        \<lbrace>\<lambda>rv s. P (state_vrefs s)\<rbrace>"
+  and arch_finalise_cap_auth':
+    "\<lbrace>pas_refined aag\<rbrace> arch_finalise_cap acap final \<lbrace>\<lambda>rv s. pas_cap_cur_auth aag (fst rv)\<rbrace>"
+  and arch_finalise_cap_obj_refs:
+    "\<And>P. \<lbrace>\<lambda>s :: det_ext state. \<forall>x \<in> aobj_ref' acap. P x\<rbrace>
+          arch_finalise_cap acap slot
+          \<lbrace>\<lambda>rv s. \<forall>x \<in> obj_refs (fst rv). P x\<rbrace>"
+  and prepare_thread_delete_st_tcb_at_halted[wp]:
+    "prepare_thread_delete t \<lbrace>\<lambda>s :: det_ext state. st_tcb_at halted t s\<rbrace>"
+  and arch_finalise_cap_makes_halted:
+    "\<lbrace>\<top>\<rbrace> arch_finalise_cap acap ex \<lbrace>\<lambda>rv s :: det_ext state. \<forall>t\<in>obj_refs (fst rv). halted_if_tcb t s\<rbrace>"
+  and arch_cap_cleanup_wf:
+    "\<lbrakk> arch_cap_cleanup_opt acap \<noteq> NullCap; \<not> is_arch_cap (arch_cap_cleanup_opt acap)\<rbrakk>
+       \<Longrightarrow> (\<exists>irq. arch_cap_cleanup_opt acap = IRQHandlerCap irq \<and> is_subject_irq aag irq)"
+  and arch_finalise_cap_pas_refined[wp]:
+    "arch_finalise_cap acap ex \<lbrace>pas_refined aag\<rbrace>"
+  and prepare_thread_delete_pas_refined[wp]:
+    "prepare_thread_delete p \<lbrace> pas_refined aag\<rbrace>"
+  and prepare_thread_delete_respects[wp]:
+    "prepare_thread_delete p \<lbrace>integrity aag X st\<rbrace>"
+  and finalise_cap_valid_list[wp]:
+    "finalise_cap param_a param_b \<lbrace>valid_list\<rbrace>"
+  and finalise_cap_replaceable:
+    "\<lbrace>\<lambda>s :: det_ext state. s \<turnstile> cap \<and> x = is_final_cap' cap s \<and> valid_mdb s \<and>
+                           cte_wp_at ((=) cap) sl s \<and> valid_objs s \<and> sym_refs (state_refs_of s) \<and>
+                           (cap_irqs cap \<noteq> {} \<longrightarrow> if_unsafe_then_cap s \<and> valid_global_refs s) \<and>
+                           (is_arch_cap cap \<longrightarrow> pspace_aligned s \<and> valid_vspace_objs s \<and>
+                                                valid_arch_state s \<and> valid_arch_caps s)\<rbrace>
+     finalise_cap cap x
+     \<lbrace>\<lambda>rv s. replaceable s sl (fst rv) cap\<rbrace>"
+
+
+context Finalise_AC_1 begin
 
 lemma tcb_sched_action_dequeue_integrity':
   "\<lbrace>integrity aag X st and pas_refined aag and
@@ -159,6 +207,8 @@ lemma cancel_all_ipc_respects [wp]:
     apply simp_all
   done
 
+end
+
 crunch pas_refined[wp]: blocked_cancel_ipc, cancel_signal "pas_refined aag"
 
 (* FIXME move to AInvs *)
@@ -197,14 +247,9 @@ lemma sbn_thread_states[wp]:
                  elim!: rsubst[where P=P, OF _ ext])
   done
 
-lemma sbn_st_vrefs[wp]:
-  "\<lbrace>\<lambda>s. P (state_vrefs s)\<rbrace> set_bound_notification t st \<lbrace>\<lambda>rv s. P (state_vrefs s)\<rbrace>"
-  apply (simp add: set_bound_notification_def)
-  apply (wpsimp wp: set_object_wp dxo_wp_weak)
-  apply (clarsimp simp: state_vrefs_def vs_refs_no_global_pts_def
-                 elim!: rsubst[where P=P, OF _ ext]
-                 dest!: get_tcb_SomeD)
-  done
+crunch tcb_domain_map_wellformed[wp]: reschedule_required "tcb_domain_map_wellformed aag"
+
+context Finalise_AC_1 begin
 
 lemma sbn_pas_refined[wp]:
   "\<lbrace>pas_refined aag and
@@ -234,11 +279,10 @@ lemma unbind_maybe_notification_pas_refined[wp]:
   apply (wp set_simple_ko_pas_refined | wpc | simp)+
   done
 
-crunch tcb_domain_map_wellformed[wp]: reschedule_required "tcb_domain_map_wellformed aag"
-
-
 crunch pas_refined[wp]: fast_finalise "pas_refined aag"
   (wp: crunch_wps simp: crunch_simps)
+
+end
 
 crunch valid_mdb[wp]: fast_finalise "valid_mdb :: det_ext state \<Rightarrow> bool"
   (wp: crunch_wps simp: crunch_simps)
@@ -246,11 +290,15 @@ crunch valid_mdb[wp]: fast_finalise "valid_mdb :: det_ext state \<Rightarrow> bo
 crunch valid_objs[wp]: fast_finalise "valid_objs :: det_ext state \<Rightarrow> bool"
   (wp: crunch_wps simp: crunch_simps)
 
+context Finalise_AC_1 begin
+
 crunch pas_refined_transferable[wp_transferable]: cap_delete_one "pas_refined aag"
   (wp: crunch_wps simp: crunch_simps)
 
-crunch pas_refined[wp, wp_not_transferable]: cap_delete_one, set_vm_root "pas_refined aag"
+crunch pas_refined[wp, wp_not_transferable]: cap_delete_one "pas_refined aag"
   (wp: crunch_wps simp: crunch_simps)
+
+end
 
 (* FIXME MOVE next to thread_set_tcb_fault_set_invs in DetSchedSchedule *)
 lemma thread_set_tcb_fault_reset_invs:
@@ -280,6 +328,7 @@ lemma reply_cap_descends_from_master0:
                         tcb_cap_cases_def is_cap_simps)
   done
 
+context Finalise_AC_1 begin
 
 lemma reply_cancel_ipc_pas_refined[wp]:
   "\<lbrace>pas_refined aag and invs and tcb_at t and K (is_subject aag t)\<rbrace>
@@ -303,7 +352,8 @@ lemma deleting_irq_handler_pas_refined[wp]:
   apply (clarsimp simp: pas_refined_def irq_map_wellformed_aux_def)
   done
 
-crunch pas_refined[wp]: "suspend", arch_finalise_cap,prepare_thread_delete "pas_refined aag"
+
+crunch pas_refined[wp]: suspend "pas_refined aag"
 
 lemma finalise_cap_pas_refined[wp]:
   "\<lbrace>pas_refined aag and invs and valid_cap cap and K (pas_cap_cur_auth aag cap)\<rbrace>
@@ -339,6 +389,8 @@ lemma cancel_all_signals_respects [wp]:
                  split: option.splits)
   apply fastforce+
   done
+
+end
 
 lemma gbn_respects[wp]:
   "\<lbrace>integrity aag X st\<rbrace> get_bound_notification t \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
@@ -429,6 +481,8 @@ lemma unbind_maybe_notification_respects:
   apply (auto simp: pred_tcb_at_def obj_at_def split: option.splits)
   done
 
+context Finalise_AC_1 begin
+
 lemma fast_finalise_respects[wp]:
   "\<lbrace>integrity aag X st and invs and pas_refined aag and valid_cap cap and
      K (pas_cap_cur_auth aag cap)\<rbrace>
@@ -456,6 +510,8 @@ lemma cap_delete_one_respects[wp,wp_not_transferable]:
         | simp)+
   apply (fastforce simp: caps_of_state_valid)
   done
+
+end
 
 lemma fast_finalise_is_transferable[wp_transferable]:
   "\<lbrace> P and K(is_transferable (Some cap)) \<rbrace>
@@ -543,6 +599,8 @@ lemma update_restart_pc_integrity_autarch[wp]:
   apply simp
   done
 
+context Finalise_AC_1 begin
+
 lemma suspend_respects[wp]:
   "\<lbrace>integrity aag X st and pas_refined aag and einvs and tcb_at t and
     K (is_subject aag t)\<rbrace>
@@ -553,6 +611,8 @@ lemma suspend_respects[wp]:
      apply (wp hoare_drop_imps)+
     apply wpsimp+
   done
+
+end
 
 lemma finalise_is_fast_finalise:
   "can_fast_finalise cap \<Longrightarrow>
@@ -577,23 +637,14 @@ lemma pas_refined_Control_into_is_subject_asid:
   apply(blast intro: sym)
   done
 
-lemma arch_finalise_cap_respects[wp]:
+locale Finalise_AC_2 = Finalise_AC_1 +
+  assumes arch_finalise_cap_respects[wp]:
   "\<lbrace>integrity aag X st and invs and pas_refined aag
              and valid_cap (cap.ArchObjectCap cap)
              and K (pas_cap_cur_auth aag (cap.ArchObjectCap cap))\<rbrace>
        arch_finalise_cap cap final \<lbrace>\<lambda>rv. integrity aag X st\<rbrace>"
-  apply (simp add: arch_finalise_cap_def)
-  apply (rule hoare_pre)
-   apply (wp unmap_page_respects unmap_page_table_respects delete_asid_respects
-              | wpc | simp)+
-  apply clarsimp
-  apply (auto simp: cap_auth_conferred_def arch_cap_auth_conferred_def is_page_cap_def
-                    aag_cap_auth_def pas_refined_all_auth_is_owns valid_cap_simps
-                    cap_links_asid_slot_def label_owns_asid_slot_def
-             dest!: pas_refined_Control intro: pas_refined_Control_into_is_subject_asid)
-  done
 
-crunch respects[wp]: prepare_thread_delete "integrity aag X st"
+context Finalise_AC_2 begin
 
 lemma finalise_cap_respects[wp]:
   "\<lbrace>integrity aag X st and pas_refined aag and einvs and valid_cap cap
@@ -645,6 +696,8 @@ lemma finalise_cap_auth:
   apply (simp add: fst_cte_ptrs_def split: cap.split_asm)
   done
 
+end
+
 lemma aag_cap_auth_Zombie:
   "pas_refined aag s \<Longrightarrow> pas_cap_cur_auth aag (cap.Zombie word a b) = is_subject aag word"
   unfolding aag_cap_auth_def
@@ -660,49 +713,52 @@ lemma aag_cap_auth_Thread:
   unfolding aag_cap_auth_def
   by (simp add: cli_no_irqs clas_no_asid cap_auth_conferred_def pas_refined_all_auth_is_owns)
 
+context Finalise_AC_2 begin
+
 lemma finalise_cap_auth':
   "\<lbrace>pas_refined aag and K (pas_cap_cur_auth aag cap)\<rbrace>
       finalise_cap cap final
    \<lbrace>\<lambda>rv s. pas_cap_cur_auth aag (fst rv)\<rbrace>"
   including no_pre
   apply (rule hoare_gen_asm)
-  apply (cases cap, simp_all add: arch_finalise_cap_def split del: if_split)
+  apply (cases cap, simp_all add: split del: if_split)
   apply (wp
     | simp add: comp_def hoare_post_taut [where P = \<top>] split del: if_split
     | fastforce simp:  aag_cap_auth_Zombie aag_cap_auth_CNode aag_cap_auth_Thread
     )+
   apply (rule hoare_pre)
-  apply (wp | simp)+
-  apply (rule hoare_pre)
-  apply (wp | wpc
-    | simp add: comp_def hoare_post_taut [where P = \<top>] split del: if_split)+
+     apply (wp | simp)+
+  apply (wp arch_finalise_cap_auth')
   done
 
 lemma finalise_cap_obj_refs:
-  "\<lbrace>\<lambda>s. \<forall>x \<in> obj_refs cap. P x\<rbrace> finalise_cap cap slot \<lbrace>\<lambda>rv s. \<forall>x \<in> obj_refs (fst rv). P x\<rbrace>"
-  apply (cases cap)
-             apply (wpsimp simp: arch_finalise_cap_def o_def|rule conjI)+
-  done
+  "\<lbrace>\<lambda>s :: det_ext state. \<forall>x \<in> obj_refs cap. P x\<rbrace> finalise_cap cap slot \<lbrace>\<lambda>rv s. \<forall>x \<in> obj_refs (fst rv). P x\<rbrace>"
+  by (cases cap) (wpsimp wp: arch_finalise_cap_obj_refs simp: o_def | rule conjI)+
+
+end
 
 lemma zombie_ptr_emptyable:
-  "\<lbrakk> caps_of_state s cref = Some (cap.Zombie ptr zbits n); invs s \<rbrakk>
+  "\<lbrakk> caps_of_state s cref = Some (Zombie ptr zbits n); invs s \<rbrakk>
      \<Longrightarrow> emptyable (ptr, cref_half) s"
   apply (clarsimp simp: emptyable_def tcb_at_def st_tcb_def2)
   apply (rule ccontr)
   apply (clarsimp simp: get_tcb_ko_at)
   apply (drule if_live_then_nonz_capD[rotated])
-    apply (auto simp: live_def hyp_live_def)[2]
+    apply (auto simp: live_def)[2]
   apply (clarsimp simp: ex_nonz_cap_to_def cte_wp_at_caps_of_state
                         zobj_refs_to_obj_refs)
   apply (drule(2) zombies_final_helperE, clarsimp, simp+)
   apply (simp add: is_cap_simps)
   done
 
+
+context Finalise_AC_2 begin
+
 lemma finalise_cap_makes_halted:
   "\<lbrace>invs and valid_cap cap and (\<lambda>s. ex = is_final_cap' cap s)
          and cte_wp_at ((=) cap) slot\<rbrace>
     finalise_cap cap ex
-   \<lbrace>\<lambda>rv s. \<forall>t \<in> obj_refs (fst rv). halted_if_tcb t s\<rbrace>"
+   \<lbrace>\<lambda>rv s :: det_ext state. \<forall>t \<in> Access.obj_refs (fst rv). halted_if_tcb t s\<rbrace>"
   apply (case_tac cap, simp_all)
             apply (wp unbind_notification_valid_objs
                  | clarsimp simp: o_def valid_cap_def cap_table_at_typ
@@ -714,12 +770,10 @@ lemma finalise_cap_makes_halted:
    apply (fastforce simp: st_tcb_at_def obj_at_def is_tcb live_def
                   dest!: final_zombie_not_live)
   apply (rename_tac arch_cap)
-  apply (case_tac arch_cap, simp_all add: arch_finalise_cap_def)
-      apply (wp
-           | clarsimp simp: valid_cap_def split: option.split bool.split
-           | intro impI conjI)+
+  apply (wp arch_finalise_cap_makes_halted)
   done
 
+end
 
 lemma aag_Control_into_owns_irq:
   "\<lbrakk>(pasSubject aag, Control, pasIRQAbs aag irq) \<in> pasPolicy aag; pas_refined aag s\<rbrakk>
@@ -741,6 +795,10 @@ lemma replaceable_zombie_not_transferable:
   "replaceable s slot (Zombie ref sz n) cap \<Longrightarrow> \<not> is_transferable (Some cap)"
   by (intro notI) (erule is_transferable.cases; simp add:replaceable_def)
 
+declare finalise_cap_valid_list[wp]
+
+
+context Finalise_AC_2 begin
 
 lemma rec_del_respects'_pre':
   "s \<turnstile> \<lbrace>(\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag
@@ -786,7 +844,7 @@ next
     apply (rule hoare_pre_spec_validE)
      apply (wp set_cap_integrity_autarch set_cap_pas_refined_not_transferable "2.hyps" static_imp_wp)
           apply ((wp preemption_point_inv'
-                 | simp add: integrity_subjects_def pas_refined_def)+)[1]
+          | simp add: integrity_subjects_def pas_refined_def)+)[1]
          apply (simp(no_asm))
          apply (rule spec_strengthen_postE)
           apply (rule spec_valid_conj_liftE1, rule valid_validE_R, rule rec_del_invs)
@@ -821,7 +879,7 @@ next
         apply (rule finalise_cap_cases[where slot=slot])
        apply (clarsimp simp: cte_wp_at_caps_of_state)
        apply (erule disjE)
-        apply (clarsimp simp: cap_cleanup_opt_def split: cap.split_asm)
+        apply (clarsimp simp: cap_cleanup_opt_def arch_cap_cleanup_wf split: cap.split_asm)
         apply (fastforce intro: owns_slot_owns_irq)
        apply (clarsimp simp: is_cap_simps cap_auth_conferred_def clas_no_asid aag_cap_auth_def
                              pas_refined_all_auth_is_owns cli_no_irqs)
@@ -888,6 +946,8 @@ lemmas rec_del_respects
     = rec_del_respects''[of True, THEN hoare_conjD1, simplified]
       rec_del_respects''[of False, THEN hoare_conjD2, simplified]
 
+end
+
 lemma finalise_cap_transferable:
   "\<lbrace>P and K(is_transferable_cap cap)\<rbrace> finalise_cap cap final \<lbrace>\<lambda>rv s . rv =(NullCap, NullCap) \<and> P s\<rbrace>"
   by (rule hoare_gen_asm) (erule is_transferable_capE; wpsimp+)
@@ -907,6 +967,8 @@ lemma rec_del_Finalise_transferable:
       apply (clarsimp; assumption)
      apply (wp finalise_cap_transferable without_preemption_wp get_cap_wp)+
   by (fastforce simp:cte_wp_at_caps_of_state)
+
+context Finalise_AC_2 begin
 
 lemma rec_del_respects_CTEDelete_transferable':
   "\<lbrace>(\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag
@@ -940,6 +1002,7 @@ lemmas rec_del_respects_CTEDelete_transferable =
   rec_del_respects_CTEDelete_transferable'[of True,THEN validE_valid,THEN hoare_conjD1,simplified]
   rec_del_respects_CTEDelete_transferable'[of False,THEN validE_valid,THEN hoare_conjD2,simplified]
 
+end
 
 
 (* TODO section change *)
@@ -948,10 +1011,7 @@ lemmas rec_del_respects_CTEDelete_transferable =
 (* FIXME: CLAG *)
 lemmas dmo_valid_cap[wp] = valid_cap_typ [OF do_machine_op_obj_at]
 
-lemma integrity_eupdate_autarch:
-  "\<lbrakk> integrity aag X st s; is_subject aag ptr \<rbrakk>
-    \<Longrightarrow> integrity aag X st (s\<lparr>ekheap := ekheap s(ptr \<mapsto> obj)\<rparr>)"
-  unfolding integrity_subjects_def by auto
+context Finalise_AC_2 begin
 
 lemma set_eobject_integrity_autarch:
   "\<lbrace>integrity aag X st and K (is_subject aag ptr)\<rbrace>
@@ -959,11 +1019,13 @@ lemma set_eobject_integrity_autarch:
    \<lbrace>\<lambda>rv. integrity aag X st\<rbrace>"
   apply (simp add: set_eobject_def)
   apply wp
-  apply (rule integrity_eupdate_autarch, simp_all)
+  apply (simp add: integrity_subjects_def)
   done
 
 crunch pas_refined[wp]: cancel_badged_sends "pas_refined aag"
   (wp: crunch_wps simp: filterM_mapM crunch_simps ignore: filterM)
+
+end
 
 lemma rsubst':
   "\<lbrakk>P s s'; s=t; s'=t'\<rbrakk> \<Longrightarrow> P t t'"
@@ -993,43 +1055,12 @@ lemma thread_set_pas_refined_triv_idleT:
   apply (rule ext, clarsimp simp: thread_bound_ntfns_def get_tcb_def ba)
   done
 
-lemma copy_global_mappings_pas_refined2:
-  "\<lbrace>invs and pas_refined aag and K (is_aligned pd pd_bits)\<rbrace>
-      copy_global_mappings pd
-   \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
-  apply (rule hoare_gen_asm, wp copy_global_mappings_pas_refined)
-  apply (auto simp: invs_def valid_state_def valid_pspace_def)
-  done
 
-lemma pas_refined_set_asid_table_empty_strg:
-  "pas_refined aag s \<and> is_subject aag pool
-   \<and> (\<forall> asid. asid \<noteq> 0 \<and> asid_high_bits_of asid = base \<longrightarrow> is_subject_asid aag asid)
-   \<and> ko_at (ArchObj (arch_kernel_obj.ASIDPool Map.empty)) pool s
-   \<longrightarrow> pas_refined aag (s\<lparr>arch_state :=
-                          arch_state s \<lparr>arm_asid_table :=
-                                        (arm_asid_table (arch_state s))(base \<mapsto> pool)\<rparr>\<rparr>)"
-  apply (clarsimp simp: pas_refined_def state_objs_to_policy_def)
-  apply (erule state_asids_to_policy_aux.cases)
-    apply(simp_all split: if_split_asm)
-      prefer 2
-      apply (clarsimp simp: state_vrefs_def obj_at_def vs_refs_no_global_pts_def)
-     apply (auto intro: state_asids_to_policy_aux.intros auth_graph_map_memI[OF sbta_vref]
-                intro!: pas_refined_refl[simplified pas_refined_def state_objs_to_policy_def])[3]
-  apply(rule pas_refined_asid_mem)
-   apply(drule_tac t="pasSubject aag" in sym)
-   apply(simp, rule sata_asidpool)
-    apply simp
-   apply assumption
-  apply(simp add: pas_refined_def state_objs_to_policy_def)
-  done
-
-lemma set_asid_pool_ko_at[wp]:
-  "\<lbrace>\<top>\<rbrace> set_asid_pool ptr pool \<lbrace>\<lambda>rv. ko_at (ArchObj (arch_kernel_obj.ASIDPool pool)) ptr\<rbrace>"
-  by (wpsimp simp: obj_at_def set_asid_pool_def set_object_def)
 
 (* The contents of the delete_access_control locale *)
 
 
+context Finalise_AC_2 begin
 
 lemma cap_delete_respects:
   "\<lbrace>integrity aag X st and cdt_change_allowed' aag slot and pas_refined aag
@@ -1060,34 +1091,7 @@ lemma cap_delete_pas_refined':
    \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
   by (wp cap_delete_pas_refined) fastforce
 
-lemma cap_revoke_respects':
-  "s \<turnstile> \<lbrace> (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and K (is_subject aag (fst slot))
-         and pas_refined aag and einvs and simple_sched_action\<rbrace>
-       (cap_revoke slot)
-   \<lbrace>\<lambda>rv. (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag\<rbrace>,
-   \<lbrace>\<lambda>rv. (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag\<rbrace>"
-proof (induct rule: cap_revoke.induct[where ?a1.0=s])
-  case (1 slot s)
-  show ?case
-    apply (subst cap_revoke.simps)
-
-    apply (rule hoare_pre_spec_validE)
-     apply (wp "1.hyps")
-            apply ((wp preemption_point_inv' | simp add: integrity_subjects_def pas_refined_def)+)[1]
-           apply (wp select_ext_weak_wp cap_delete_respects cap_delete_pas_refined
-                 | simp split del: if_split | wp (once) hoare_vcg_const_imp_lift hoare_drop_imps)+
-    by (auto simp: emptyable_def descendants_of_def
-             dest: reply_slot_not_descendant
-            intro: cca_owned)
-qed
-
-lemmas cap_revoke_respects[wp]
-    = cap_revoke_respects'[of _ True, THEN use_spec(2), THEN validE_valid,
-                           THEN hoare_conjD1, simplified]
-
-lemmas cap_revoke_pas_refined[wp]
-    = cap_revoke_respects'[of _ False, THEN use_spec(2), THEN validE_valid,
-                           THEN hoare_conjD2, simplified]
+end
 
 (* MOVE *)
 lemma empty_slot_cte_wp_at:
@@ -1118,19 +1122,36 @@ lemma deleting_irq_handler_caps_of_state_nullinv:
   apply fastforce
   done
 
-lemma finalise_cap_caps_of_state_nullinv:
-  "\<lbrace>\<lambda>s. P (caps_of_state s) \<and> (\<forall>p. P (caps_of_state s(p \<mapsto> cap.NullCap)))\<rbrace>
-     finalise_cap cap final
-   \<lbrace>\<lambda>rv s. P (caps_of_state s)\<rbrace>"
-  by (cases cap;
-      wpsimp wp: suspend_caps_of_state unbind_notification_caps_of_state
-                 unbind_notification_cte_wp_at
-                 hoare_vcg_all_lift hoare_drop_imps
-                 deleting_irq_handler_caps_of_state_nullinv
-           simp: fun_upd_def[symmetric] if_apply_def2 split_del: if_split)
+
+locale Finalise_AC_3 = Finalise_AC_2 +
+  assumes cap_revoke_respects':
+  "s \<turnstile> \<lbrace> (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and K (is_subject aag (fst slot))
+         and pas_refined aag and einvs and simple_sched_action\<rbrace>
+       (cap_revoke slot)
+   \<lbrace>\<lambda>rv. (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag\<rbrace>,
+   \<lbrace>\<lambda>rv. (\<lambda>s. trp \<longrightarrow> integrity aag X st s) and pas_refined aag\<rbrace>"
+and finalise_cap_caps_of_state_nullinv:
+  "\<And>P. \<lbrace>\<lambda>s :: det_ext state. P (caps_of_state s) \<and> (\<forall>p. P (caps_of_state s(p \<mapsto> cap.NullCap)))\<rbrace>
+        finalise_cap cap final
+        \<lbrace>\<lambda>rv s. P (caps_of_state s)\<rbrace>"
+ and finalise_cap_fst_ret:
+  "\<And>P. \<lbrace>\<lambda>s :: det_ext state. P cap.NullCap \<and> (\<forall>a b c. P (cap.Zombie a b c)) \<rbrace>
+        finalise_cap cap is_final
+        \<lbrace>\<lambda>rv s. P (fst rv)\<rbrace>"
+
+
+context Finalise_AC_3 begin
+
+lemmas cap_revoke_respects[wp]
+    = cap_revoke_respects'[of _ True, THEN use_spec(2), THEN validE_valid,
+                           THEN hoare_conjD1, simplified]
+
+lemmas cap_revoke_pas_refined[wp]
+    = cap_revoke_respects'[of _ False, THEN use_spec(2), THEN validE_valid,
+                           THEN hoare_conjD2, simplified]
 
 lemma finalise_cap_cte_wp_at_nullinv:
-  "\<lbrace>\<lambda>s. P cap.NullCap \<and> cte_wp_at P p s\<rbrace>
+  "\<lbrace>\<lambda>s :: det_ext state. P cap.NullCap \<and> cte_wp_at P p s\<rbrace>
      finalise_cap cap final
    \<lbrace>\<lambda>rv s. cte_wp_at P p s\<rbrace>"
   apply (simp add: cte_wp_at_caps_of_state)
@@ -1138,21 +1159,10 @@ lemma finalise_cap_cte_wp_at_nullinv:
   apply simp
   done
 
-lemma finalise_cap_fst_ret:
-  "\<lbrace>\<lambda>s. P cap.NullCap \<and> (\<forall>a b c. P (cap.Zombie a b c)) \<rbrace>
-     finalise_cap cap is_final
-   \<lbrace>\<lambda>rv s. P (fst rv)\<rbrace>"
-  including no_pre
-  apply (cases cap, simp_all add: arch_finalise_cap_def split del: if_split)
-  apply (wp | simp add: comp_def split del: if_split | fastforce)+
-  apply (rule hoare_pre)
-  apply (wp | simp | (rule hoare_pre, wpc))+
-  done
-
 lemma rec_del_preserves_cte_zombie_null:
   assumes P_Null: "P (NullCap)"
   assumes P_Zombie: "\<And>word x y. P (Zombie word x y)"
-  shows "s \<turnstile> \<lbrace>\<lambda>s. ((slot_rdcall call \<noteq> p \<or> exposed_rdcall call)
+  shows "s \<turnstile> \<lbrace>\<lambda>s :: det_ext state. ((slot_rdcall call \<noteq> p \<or> exposed_rdcall call)
                          \<longrightarrow> cte_wp_at P p s)
                     \<and> (case call of ReduceZombieCall remove slot _
                         \<Rightarrow> cte_wp_at ((=) remove) slot s | _ \<Rightarrow> True)\<rbrace>
@@ -1227,41 +1237,27 @@ next
     done
 qed
 
-lemma nullcap_not_pg_cap:
-  "is_pg_cap NullCap \<longrightarrow> has_cancel_send_rights NullCap"
-  by (clarsimp simp: is_pg_cap_def)
 
-lemma zombie_not_pg_cap:
-  "is_pg_cap (Zombie word x y) \<longrightarrow> has_cancel_send_rights (Zombie word x y)"
-  by (clarsimp simp: is_pg_cap_def)
 
-lemmas rec_del_has_cancel_send_rights' =
-           rec_del_preserves_cte_zombie_null[where P="\<lambda>cap. is_pg_cap cap
-                                                        \<longrightarrow> has_cancel_send_rights cap",
-                                             OF nullcap_not_pg_cap zombie_not_pg_cap]
 
 lemma rec_del_preserves_cte_zombie_null_insts:
   assumes P_Null: "P (NullCap)"
   assumes P_Zombie: "\<And>word x y. P (Zombie word x y)"
-  shows "\<lbrace>cte_wp_at P p\<rbrace> rec_del (FinaliseSlotCall slot True) \<lbrace>\<lambda>_. cte_wp_at P p\<rbrace>,-"
-        "\<lbrace>cte_wp_at P p\<rbrace> cap_delete slot \<lbrace>\<lambda>_. cte_wp_at P p\<rbrace>,-"
+  shows "\<lbrace>\<lambda>s :: det_ext state. cte_wp_at P p s\<rbrace> rec_del (FinaliseSlotCall slot True) \<lbrace>\<lambda>_. cte_wp_at P p\<rbrace>,-"
+        "\<lbrace>\<lambda>s :: det_ext state. cte_wp_at P p s\<rbrace> cap_delete slot \<lbrace>\<lambda>_. cte_wp_at P p\<rbrace>,-"
   apply (simp add: validE_R_def P_Null P_Zombie cap_delete_def
         | rule use_spec spec_strengthen_postE[OF hoare_pre_spec_validE
                             [OF rec_del_preserves_cte_zombie_null[where P=P]]]
         | wp)+
 done
 
-lemmas rec_del_has_cancel_send_rights_insts =
-           rec_del_preserves_cte_zombie_null_insts[where P="\<lambda>cap. is_pg_cap cap
-                                                              \<longrightarrow> has_cancel_send_rights cap",
-                                                   OF nullcap_not_pg_cap zombie_not_pg_cap]
 
 lemma cap_revoke_preserves_cte_zombie_null:
   fixes p
   assumes Q_Null: "Q (NullCap)"
   assumes Q_Zombie: "\<And>word x y. Q (Zombie word x y)"
   defines "P \<equiv> cte_wp_at (\<lambda>cap. Q cap) p"
-  shows "s \<turnstile> \<lbrace>P\<rbrace> cap_revoke ptr \<lbrace>\<lambda>rv. P\<rbrace>, \<lbrace>\<lambda>rv. \<top>\<rbrace>"
+  shows "s \<turnstile> \<lbrace>\<lambda>s :: det_ext state. P s\<rbrace> cap_revoke ptr \<lbrace>\<lambda>rv. P\<rbrace>, \<lbrace>\<lambda>rv. \<top>\<rbrace>"
 proof (induct rule: cap_revoke.induct)
   case (1 slot)
   show ?case
@@ -1273,14 +1269,6 @@ proof (induct rule: cap_revoke.induct)
                   | simp add: Q_Null Q_Zombie)+
     done
 qed
-
-lemmas cap_revoke_has_cancel_send_rights' =
-                  cap_revoke_preserves_cte_zombie_null[where Q="\<lambda>cap. is_pg_cap cap
-                                                                  \<longrightarrow> has_cancel_send_rights cap",
-                                                       OF nullcap_not_pg_cap zombie_not_pg_cap]
-
-lemmas cap_revoke_has_cancel_send_rights
-    = cap_revoke_has_cancel_send_rights'[THEN use_spec(2), folded validE_R_def]
 
 lemma invoke_cnode_respects:
   "\<lbrace>integrity aag X st and authorised_cnode_inv aag ci
@@ -1300,6 +1288,8 @@ lemma invoke_cnode_respects:
             | rule hoare_pre | rule cca_direct)+
   apply (auto simp: cap_auth_conferred_def cap_rights_to_auth_def aag_cap_auth_def)
   done
+
+end
 
 lemma set_cap_cte_wp_at_separation:
   "\<lbrace> cte_wp_at P slot and K(slot \<noteq> slot') \<rbrace>
@@ -1334,6 +1324,8 @@ lemma is_derived_is_transferable:
   apply simp
   apply (simp add:is_derived_def is_cap_simps)
   done
+
+context Finalise_AC_3 begin
 
 lemma invoke_cnode_pas_refined:
   "\<lbrace>pas_refined aag and pas_cur_domain aag and einvs and simple_sched_action
