@@ -6,7 +6,7 @@
 
 theory Interrupt_AC
 imports
-  Finalise_AC
+  ArchFinalise_AC
 begin
 
 context begin interpretation Arch . (*FIXME: arch_split*)

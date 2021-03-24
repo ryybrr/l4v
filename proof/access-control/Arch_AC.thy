@@ -5,16 +5,16 @@
  *)
 
 theory Arch_AC
-imports Retype_AC
+imports ArchRetype_AC
 begin
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 text\<open>
 
 Arch-specific access control.
 
 \<close>
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma store_pde_respects:
   "\<lbrace>integrity aag X st and K (is_subject aag (p && ~~ mask pd_bits)) \<rbrace>
@@ -194,7 +194,8 @@ lemma pde_ref_pde_ref2:
   unfolding pde_ref_def pde_ref2_def
   by (cases x, simp_all)
 
-lemma ptr_range_0 [simp]: "ptr_range (p :: word32) 0 = {p}"
+(* FIXME ryanb: not arch-specific *)
+lemma ptr_range_0 [simp]: "ptr_range (p :: obj_ref) 0 = {p}"
   unfolding ptr_range_def by simp
 
 lemma mask_PTCap_eq:
@@ -208,6 +209,7 @@ crunch cdt[wp]: unmap_page_table "\<lambda>s. P (cdt s)"
   (simp: crunch_simps wp: crunch_wps)
 
 (* FIXME MOVE *)
+(* FIXME ryanb: not arch-specific *)
 lemma is_transferable_ArchCap[simp]:
   "\<not> is_transferable
         (Some (ArchObjectCap cap))"
@@ -302,6 +304,7 @@ lemma vs_refs_no_global_pts_pdI:
   apply (clarsimp simp: ucast_ucast_mask )
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma aag_has_auth_to_Control_eq_owns:
   "pas_refined aag s \<Longrightarrow> aag_has_auth_to aag Control p = is_subject aag p"
   by (auto simp: pas_refined_refl elim: aag_Control_into_owns)
@@ -380,6 +383,7 @@ lemma lookup_pt_slot_authorised3:
   apply (simp add: p_0x3C_shift)
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma mapM_set':
   assumes ip: "\<And>x y. \<lbrakk> x \<in> set xs; y \<in> set xs \<rbrakk> \<Longrightarrow> \<lbrace>I x and I y\<rbrace> f x \<lbrace>\<lambda>_. I y\<rbrace>"
   and   rl: "\<And>s. (\<forall>x \<in> set xs. I x s) \<Longrightarrow> P s"
@@ -401,6 +405,7 @@ lemma mapM_set':
     apply simp+
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma mapM_set'':
   assumes ip: "\<And>x y. \<lbrakk> x \<in> set xs; y \<in> set xs \<rbrakk> \<Longrightarrow> \<lbrace>I x and I y and Q\<rbrace> f x \<lbrace>\<lambda>_. I y and Q\<rbrace>"
   and   rl: "\<And>s. (\<forall>x \<in> set xs. I x s) \<and> Q s \<Longrightarrow> P s"
@@ -455,6 +460,7 @@ lemma unmap_page_respects:
   done
 
 (* FIXME: MOVE *)
+(* FIXME ryanb: not arch-specific *)
 lemma less_shiftr:
   shows "\<lbrakk> x < y; is_aligned y n \<rbrakk> \<Longrightarrow> x >> n < y >> n"
   apply (simp add: word_less_nat_alt shiftr_div_2n')
@@ -475,10 +481,12 @@ lemmas do_machine_op_bind =
     submonad_bind [OF submonad_do_machine_op submonad_do_machine_op
                       submonad_do_machine_op]
 
+(* FIXME ryanb: not arch-specific *)
 lemma mol_mem[wp]:
   "\<lbrace>\<lambda>ms. P (underlying_memory ms)\<rbrace> machine_op_lift mop \<lbrace>\<lambda>rv ms. P (underlying_memory ms)\<rbrace>"
   by (simp add: machine_op_lift_def machine_rest_lift_def split_def | wp)+
 
+(* FIXME ryanb: not arch-specific *)
 lemma mol_dvs[wp]:
   "\<lbrace>\<lambda>ms. P (device_state ms)\<rbrace> machine_op_lift mop \<lbrace>\<lambda>rv ms. P (device_state ms)\<rbrace>"
   by (simp add: machine_op_lift_def machine_rest_lift_def split_def | wp)+
@@ -503,6 +511,7 @@ lemma invalidate_tlb_by_asid_pas_refined[wp]:
   "\<lbrace>pas_refined aag\<rbrace> invalidate_tlb_by_asid asid \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
   by (wp dmo_no_mem_respects | wpc | simp add: invalidate_tlb_by_asid_def invalidateLocalTLB_ASID_def)+
 
+(* FIXME ryanb: not arch-specific *)
 lemma as_user_pas_refined[wp]:
   "\<lbrace>\<lambda>s. pas_refined aag s\<rbrace> as_user t f \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
   apply (simp add: pas_refined_def state_objs_to_policy_def)
@@ -512,15 +521,18 @@ lemma as_user_pas_refined[wp]:
   apply simp
   done
 
+(* FIXME ryanb: not arch-specific *)
 crunch pas_refined[wp]: set_message_info "pas_refined aag"
 
 (* FIXME: move *)
+(* FIXME ryanb: not arch-specific *)
 lemma set_message_info_mdb[wp]:
   "\<lbrace>\<lambda>s. P (cdt s)\<rbrace> set_message_info thread info \<lbrace>\<lambda>rv s. P (cdt s)\<rbrace>"
   unfolding set_message_info_def by wp
 
 crunch state_vrefs[wp]: do_machine_op "\<lambda>s::'z::state_ext state. P (state_vrefs s)"
 
+(* FIXME ryanb: not arch-specific *)
 crunch thread_states[wp]: do_machine_op "\<lambda>s. P (thread_states s)"
 
 (* FIXME: move *)
@@ -536,6 +548,7 @@ lemma set_mrs_state_vrefs[wp]:
   done
 
 (* FIXME: move *)
+(* FIXME ryanb: not arch-specific *)
 lemma set_mrs_thread_states[wp]:
   "\<lbrace>\<lambda>s. P (thread_states s)\<rbrace> set_mrs thread buf msgs \<lbrace>\<lambda>rv s. P (thread_states s)\<rbrace>"
   apply (simp add: set_mrs_def split_def set_object_def get_object_def split del: if_split)
@@ -545,6 +558,7 @@ lemma set_mrs_thread_states[wp]:
   apply (clarsimp simp: fun_upd_def[symmetric] thread_states_preserved)
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma set_mrs_thread_bound_ntfns[wp]:
   "\<lbrace>\<lambda>s. P (thread_bound_ntfns s)\<rbrace> set_mrs thread buf msgs \<lbrace>\<lambda>rv s. P (thread_bound_ntfns s)\<rbrace>"
   apply (simp add: set_mrs_def split_def set_object_def get_object_def split del: if_split)
@@ -554,6 +568,7 @@ lemma set_mrs_thread_bound_ntfns[wp]:
   apply (clarsimp simp: fun_upd_def[symmetric] thread_bound_ntfns_preserved )
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma set_mrs_pas_refined[wp]:
   "\<lbrace>pas_refined aag\<rbrace> set_mrs thread buf msgs \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
   apply (simp add: pas_refined_def state_objs_to_policy_def)
@@ -562,6 +577,7 @@ lemma set_mrs_pas_refined[wp]:
   apply (clarsimp dest!: auth_graph_map_memD)
   done
 
+(* FIXME ryanb: not arch-specific *)
 crunch integrity_autarch: set_message_info "integrity aag X st"
 
 lemma dmo_storeWord_respects_Write:
@@ -574,12 +590,14 @@ lemma dmo_storeWord_respects_Write:
   done
 
 (* c.f.  auth_ipc_buffers *)
+(* FIXME ryanb: not arch-specific *)
 definition
   ipc_buffer_has_auth :: "'a PAS \<Rightarrow> word32 \<Rightarrow> word32 option \<Rightarrow> bool"
 where
    "ipc_buffer_has_auth aag thread \<equiv>
     case_option True (\<lambda>buf'. is_aligned buf' msg_align_bits \<and> (\<forall>x \<in> ptr_range buf' msg_align_bits. (pasObjectAbs aag thread, Write, pasObjectAbs aag x) \<in> pasPolicy aag))"
 
+(* FIXME ryanb: not arch-specific *)
 lemma ipc_buffer_has_auth_wordE:
   "\<lbrakk> ipc_buffer_has_auth aag thread (Some buf); p \<in> ptr_range (buf + off) sz; is_aligned off sz; sz \<le> msg_align_bits; off < 2 ^ msg_align_bits \<rbrakk>
   \<Longrightarrow> (pasObjectAbs aag thread, Write, pasObjectAbs aag p) \<in> pasPolicy aag"
@@ -589,7 +607,7 @@ lemma ipc_buffer_has_auth_wordE:
   apply (erule (4) set_mp [OF ptr_range_subset])
   done
 
-
+(* FIXME ryanb: not arch-specific *)
 lemma is_aligned_word_size_2 [simp]:
   "is_aligned (p * of_nat word_size) 2"
   unfolding word_size_def
@@ -778,6 +796,7 @@ lemma pas_refined_set_asid_strg:
 
 
 (* FIXME: copied from Detype_R. *)
+(* FIXME ryanb: remove *)
 lemma gets_modify_comm2:
   "\<forall>s. g (f s) = g s \<Longrightarrow>
    (do x \<leftarrow> modify f; y \<leftarrow> gets g; m x y od) =
@@ -810,6 +829,7 @@ lemma empty_fail_freeMemory: "empty_fail (freeMemory ptr bits)"
   by (simp add: freeMemory_def mapM_x_mapM ef_storeWord)
 
 (* FIXME: copied from Detype_R. *)
+(* FIXME ryanb: remove *)
 lemma delete_objects_def2:
   "delete_objects ptr bits \<equiv>
    do modify (detype {ptr..ptr + 2 ^ bits - 1});
@@ -818,6 +838,7 @@ lemma delete_objects_def2:
   by (rule eq_reflection)
      (simp add: delete_objects_def dmo_detype_comm[OF empty_fail_freeMemory])
 
+(* FIXME ryanb: not arch-specific *)
 lemma delete_objects_pspace_no_overlap:
   "\<lbrace> pspace_aligned and valid_objs and
      (\<lambda> s. \<exists> idx. cte_wp_at ((=) (UntypedCap dev ptr sz idx)) slot s)\<rbrace>
@@ -830,7 +851,7 @@ lemma delete_objects_pspace_no_overlap:
    apply(auto dest: cte_wp_at_valid_objs_valid_cap)
   done
 
-
+(* FIXME ryanb: not arch-specific *)
 lemma delete_objects_invs_ex:
   "\<lbrace>(\<lambda>s. \<exists>slot dev f.
          cte_wp_at ((=) (UntypedCap dev ptr bits f)) slot s \<and>
@@ -972,6 +993,7 @@ lemma perform_asid_pool_invocation_respects:
   apply (auto iff: authorised_asid_pool_inv_def)
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma is_subject_asid_into_loas:
   "\<lbrakk> is_subject_asid aag asid; pas_refined aag s \<rbrakk> \<Longrightarrow> label_owns_asid_slot aag (pasSubject aag) asid"
   unfolding label_owns_asid_slot_def
@@ -1101,6 +1123,7 @@ lemma create_mapping_entries_authorised_slots [wp]:
   apply (auto simp: pde_ref2_def vmsz_aligned_def lookup_pd_slot_add_eq)
   done
 
+(* FIXME ryanb: not arch-specific *)
 lemma x_t2n_sub_1_neg_mask:
   "\<lbrakk> is_aligned x n; n \<le> m \<rbrakk>
      \<Longrightarrow> x + 2 ^ n - 1 && ~~ mask m = x && ~~ mask m"
@@ -1122,6 +1145,7 @@ lemma pageBitsForSize_le_t29:
 lemmas vmsz_aligned_t2n_neg_mask
     = x_t2n_sub_1_neg_mask[OF _ pageBitsForSize_le_t29, folded vmsz_aligned_def]
 
+(* FIXME ryanb: not arch-specific *)
 lemma decode_arch_invocation_authorised:
   "\<lbrace>invs and pas_refined aag
         and cte_wp_at ((=) (cap.ArchObjectCap cap)) slot
@@ -1281,7 +1305,7 @@ lemma delete_asid_pool_respects[wp]:
   apply (wp mapM_wp[OF _ subset_refl] | simp)+
   done
 
-
+(* FIXME ryanb: not arch-specific *)
 lemma pas_refined_asid_mem:
   "\<lbrakk> v \<in> state_asids_to_policy aag s; pas_refined aag s \<rbrakk>
          \<Longrightarrow> v \<in> pasPolicy aag"
