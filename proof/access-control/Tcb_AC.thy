@@ -8,8 +8,6 @@ theory Tcb_AC
 imports ArchFinalise_AC
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 (* FIXME-NTFN: The 'NotificationControl' case of the following definition needs to be changed. *)
 
 definition
@@ -203,8 +201,6 @@ lemma simplify_post:
   apply (clarsimp simp add: safe_id_def)+
   done
 
-end
-
 lemma (in is_extended') valid_cap_syn[wp]: "I (\<lambda>s. valid_cap_syn s a)" by (rule lift_inv,simp)
 
 lemma (in is_extended') no_cap_to_obj_dr_emp[wp]: "I (no_cap_to_obj_dr_emp a)" by (rule lift_inv,simp)
@@ -214,8 +210,6 @@ lemma (in is_extended') cte_wp_at[wp]: "I (cte_wp_at P a)" by (rule lift_inv,sim
 crunch pas_refined[wp]: set_mcpriority "pas_refined aag"
 
 crunch integrity_autarch: set_mcpriority "integrity aag X st"
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma checked_insert_pas_refined:
   "\<lbrace>pas_refined aag and valid_mdb and
@@ -272,78 +266,6 @@ lemma cap_insert_cdt_change_allowed[wp]:
   apply (intro allI notI)
   apply (drule(1) mdb_cte_atD[rotated])
   apply (simp add:cte_wp_at_caps_of_state)
-  done
-
-
-lemma invoke_tcb_tc_respects_aag:
-  "\<lbrace> integrity aag X st and pas_refined aag
-         and einvs and simple_sched_action
-         and tcb_inv_wf (ThreadControl t sl ep mcp priority croot vroot buf)
-         and K (authorised_tcb_inv aag (ThreadControl t sl ep mcp priority croot vroot buf))\<rbrace>
-     invoke_tcb (ThreadControl t sl ep mcp priority croot vroot buf)
-   \<lbrace>\<lambda>rv. integrity aag X st and pas_refined aag\<rbrace>"
-  apply (rule hoare_gen_asm)+
-  apply (subst invoke_tcb.simps)
-  apply (subst set_priority_extended.dxo_eq)
-  apply (rule hoare_vcg_precond_imp)
-   apply (rule_tac P="case ep of Some v \<Rightarrow> length v = word_bits | _ \<Rightarrow> True"
-                 in hoare_gen_asm)
-   apply (simp only: split_def)
-  apply ((simp add: conj_comms del: hoare_True_E_R,
-                  strengthen imp_consequent[where Q="x = None" for x], simp cong: conj_cong)
-        | rule wp_split_const_if wp_split_const_if_R
-                   hoare_vcg_all_lift_R
-                   hoare_vcg_E_elim hoare_vcg_const_imp_lift_R
-                   hoare_vcg_R_conj
-        | wp
-             restart_integrity_autarch set_mcpriority_integrity_autarch
-             as_user_integrity_autarch thread_set_integrity_autarch
-             option_update_thread_integrity_autarch
-             out_valid_sched static_imp_wp
-             cap_insert_integrity_autarch checked_insert_pas_refined
-             cap_delete_respects' cap_delete_pas_refined'
-             check_cap_inv2[where Q="\<lambda>_. integrity aag X st"]
-             as_user_pas_refined restart_pas_refined
-             thread_set_pas_refined
-             option_update_thread_pas_refined
-             out_invs_trivial case_option_wpE cap_delete_deletes
-             cap_delete_valid_cap cap_insert_valid_cap out_cte_at
-             cap_insert_cte_at cap_delete_cte_at out_valid_cap out_tcb_valid
-             hoare_vcg_const_imp_lift_R hoare_vcg_all_lift_R
-             thread_set_tcb_ipc_buffer_cap_cleared_invs
-             thread_set_invs_trivial[OF ball_tcb_cap_casesI]
-             hoare_vcg_all_lift thread_set_valid_cap out_emptyable
-             check_cap_inv[where P="valid_cap c" for c]
-             check_cap_inv[where P="tcb_cap_valid c p" for c p]
-             check_cap_inv[where P="cte_at p0" for p0]
-             check_cap_inv[where P="tcb_at p0" for p0]
-             check_cap_inv[where P="simple_sched_action"]
-             check_cap_inv[where P="valid_list"]
-             check_cap_inv[where P="valid_sched"]
-             thread_set_cte_at
-             thread_set_cte_wp_at_trivial[where Q="\<lambda>x. x", OF ball_tcb_cap_casesI]
-             thread_set_no_cap_to_trivial[OF ball_tcb_cap_casesI]
-             checked_insert_no_cap_to
-             out_no_cap_to_trivial[OF ball_tcb_cap_casesI]
-             thread_set_ipc_tcb_cap_valid
-             cap_delete_pas_refined'[THEN valid_validE_E] thread_set_cte_wp_at_trivial
-        | simp add: ran_tcb_cap_cases dom_tcb_cap_cases[simplified]
-                    emptyable_def a_type_def partial_inv_def
-               del: hoare_True_E_R
-        | wpc
-        | strengthen invs_mdb use_no_cap_to_obj_asid_strg
-                     tcb_cap_always_valid_strg[where p="tcb_cnode_index 0"]
-                     tcb_cap_always_valid_strg[where p="tcb_cnode_index (Suc 0)"]
-        )+
-  apply (clarsimp simp: authorised_tcb_inv_def)
-  apply (clarsimp simp: tcb_at_cte_at_0 tcb_at_cte_at_1[simplified]
-                        is_cap_simps is_valid_vtable_root_def
-                        is_cnode_or_valid_arch_def tcb_cap_valid_def
-                        tcb_at_st_tcb_at[symmetric] invs_valid_objs
-                        cap_asid_def vs_cap_ref_def
-                        clas_no_asid cli_no_irqs
-                        emptyable_def
-       | rule conjI | erule pas_refined_refl)+
   done
 
 lemma invoke_tcb_unbind_notification_respects:
@@ -410,19 +332,44 @@ lemma invoke_tcb_ntfn_control_respects[wp]:
    apply (wp invoke_tcb_bind_notification_respects invoke_tcb_unbind_notification_respects | simp)+
   done
 
+
+locale Tcb_AC_1 =
+  fixes aag :: "'a PAS"
+  assumes arch_post_modify_registers_invs[wp]:
+    "arch_post_modify_registers cur t \<lbrace>pas_refined aag\<rbrace>"
+  and arch_post_modify_registers_respects:
+    "\<lbrace>integrity aag X st and K (is_subject aag t)\<rbrace>
+     arch_post_modify_registers cur t
+     \<lbrace>\<lambda>rv s. integrity aag X st s\<rbrace>"
+  and arch_get_sanitise_register_info_inv[wp]:
+    "arch_get_sanitise_register_info t \<lbrace>\<lambda>s :: det_ext state. P s\<rbrace>"
+ and invoke_tcb_tc_respects_aag:
+  "\<lbrace> integrity aag X st and pas_refined aag
+         and einvs and simple_sched_action
+         and tcb_inv_wf (ThreadControl t sl ep mcp priority croot vroot buf)
+         and K (authorised_tcb_inv aag (ThreadControl t sl ep mcp priority croot vroot buf))\<rbrace>
+     invoke_tcb (ThreadControl t sl ep mcp priority croot vroot buf)
+   \<lbrace>\<lambda>rv. integrity aag X st and pas_refined aag\<rbrace>"
+
+
+context Tcb_AC_1 begin
+
 lemma invoke_tcb_respects:
   "\<lbrace>integrity aag X st and pas_refined aag
          and einvs and simple_sched_action and Tcb_AI.tcb_inv_wf ti
          and K (authorised_tcb_inv aag ti)\<rbrace>
      invoke_tcb ti
-   \<lbrace>\<lambda>rv. integrity aag X st\<rbrace>"
+   \<lbrace>\<lambda>rv s :: det_ext state. integrity aag X st s\<rbrace>"
   apply (cases ti, simp_all add: hoare_conjD1 [OF invoke_tcb_tc_respects_aag [simplified simp_thms]]
                             del: invoke_tcb.simps Tcb_AI.tcb_inv_wf.simps K_def)
   apply (safe intro!: hoare_gen_asm)
-  apply ((wp itr_wps mapM_x_wp' | simp add: if_apply_def2 split del: if_split
-            | wpc | clarsimp simp: authorised_tcb_inv_def arch_get_sanitise_register_info_def
+  apply ((wp itr_wps mapM_x_wp' arch_post_modify_registers_respects | simp add: if_apply_def2 split del: if_split
+            | wpc | clarsimp simp: authorised_tcb_inv_def
             | rule conjI | subst(asm) idle_no_ex_cap)+)
   done
+
+end
+
 
 subsubsection\<open>@{term "pas_refined"}\<close>
 
@@ -458,6 +405,9 @@ lemma invoke_tcb_ntfn_control_pas_refined[wp]:
    apply (wp | simp add: authorised_tcb_inv_def)+
   done
 
+
+context Tcb_AC_1 begin
+
 lemma invoke_tcb_pas_refined:
   "\<lbrace>pas_refined aag and Tcb_AI.tcb_inv_wf ti and einvs and simple_sched_action
        and K (authorised_tcb_inv aag ti)\<rbrace>
@@ -475,12 +425,14 @@ lemma invoke_tcb_pas_refined:
   apply (cases ti, simp_all add: authorised_tcb_inv_def)
         apply (wp ita_wps hoare_drop_imps mapM_x_wp'
               | simp add: emptyable_def if_apply_def2 authorised_tcb_inv_def
-                          arch_get_sanitise_register_info_def
               | rule ball_tcb_cap_casesI
               | wpc
               | fastforce intro: notE[rotated,OF idle_no_ex_cap,simplified]
                            simp: invs_valid_global_refs invs_valid_objs)+
   done
+
+end
+
 
 subsection\<open>TCB / decode\<close>
 
@@ -641,7 +593,5 @@ text\<open>
 to show @{term "integrity"} or @{term "pas_refined"}.
 
 \<close>
-
-end
 
 end

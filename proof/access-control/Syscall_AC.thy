@@ -7,7 +7,7 @@
 theory Syscall_AC
 imports
   Ipc_AC
-  Tcb_AC
+  ArchTcb_AC
   ArchInterrupt_AC
   DomainSepInv
 begin
