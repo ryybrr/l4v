@@ -150,10 +150,6 @@ locale Access_AC_1 =
     "\<lbrakk> arch_integrity_obj_alt aag subjects l ko ko';
        arch_integrity_obj_alt aag subjects l ko' ko'' \<rbrakk>
        \<Longrightarrow> arch_integrity_obj_alt aag subjects l ko ko''"
-  and arch_integrity_update_autarch:
-    "\<lbrakk> arch_integrity_subjects {pasSubject aag} aag (pasMayActivate aag) X st s; is_subject aag ptr \<rbrakk>
-       \<Longrightarrow> arch_integrity_subjects {pasSubject aag} aag (pasMayActivate aag) X st
-                                                    (s\<lparr>kheap := kheap s(ptr \<mapsto> obj)\<rparr>)"
   and clas_caps_of_state:
     "\<lbrakk> caps_of_state s slot = Some cap; pas_refined aag s \<rbrakk>
        \<Longrightarrow> cap_links_asid_slot aag (pasObjectAbs aag (fst slot)) cap"
@@ -463,9 +459,11 @@ lemma caps_of_state_tcb_cap_cases:
   apply simp
   done
 
-lemmas integrity_obj_simps[simp] =
+lemmas integrity_obj_simps [simp] =
   tro_orefl[OF refl]
   tro_lrefl[OF singletonI]
+  trm_orefl[OF refl]
+  trd_orefl[OF refl]
   tre_lrefl[OF singletonI]
   tre_orefl[OF refl]
 
@@ -857,7 +855,7 @@ lemma tsos_tro_running:
 
 end
 
-
+(*
 locale Access_AC_2 = Access_AC_1 +
   assumes arch_integrity_trans:
     "\<lbrakk> arch_integrity_subjects subjects aag activate X s s';
@@ -870,7 +868,24 @@ locale Access_AC_2 = Access_AC_1 +
   and arch_eintegrity_sa_update:
     "arch_integrity_subjects subjects aag activate X st (scheduler_action_update f s) =
      arch_integrity_subjects subjects aag activate X st s"
-
+*)
+locale Access_AC_2 = Access_AC_1 +
+  assumes integrity_asids_refl[simp]:
+    "integrity_asids aag subjects x (s :: det_ext state) s"
+  and integrity_asids_update_autarch:
+    "\<lbrakk> integrity_asids aag subjects x st s; is_subject aag ptr \<rbrakk>
+       \<Longrightarrow> integrity_asids aag subjects x (st :: det_ext state) (s\<lparr>kheap := kheap s(ptr \<mapsto> obj)\<rparr>)"
+  and integrity_asids_sa_update:
+    "integrity_asids aag subjects x (st :: det_ext state) (scheduler_action_update f s) =
+     integrity_asids aag subjects x st s"
+  and trasids_trans:
+    "\<lbrakk> (\<forall>x. integrity_asids aag subjects x s (s' :: det_ext state));
+       (\<forall>x. integrity_asids aag subjects x  s' (s'' :: det_ext state))\<rbrakk>
+       \<Longrightarrow> (\<forall>x. integrity_asids aag subjects x s s'')"
+  and auth_ipc_buffers_tro:
+    "\<lbrakk> integrity_obj_state aag activate subjects s s';
+       x \<in> auth_ipc_buffers s' p; pasObjectAbs aag p \<notin> subjects \<rbrakk>
+       \<Longrightarrow> x \<in> auth_ipc_buffers s p "
 
 section \<open>Generic AC stuff\<close>
 
@@ -881,14 +896,99 @@ context Access_AC_2 begin
 lemma integrity_trans:
   assumes t1: "integrity_subjects subjects aag activate X s s'"
   and     t2: "integrity_subjects subjects aag activate X s' s''"
-  shows       "integrity_subjects subjects aag activate X s s''"
+  shows  "integrity_subjects subjects aag activate X s s''"
 proof -
-  show ?thesis using tro_trans t1 t2
-    apply (clarsimp simp add: integrity_subjects_def arch_integrity_trans
-                    simp del: split_paired_All)
+  from t1 have tro1: "integrity_obj_state aag activate subjects s s'"
+    unfolding integrity_subjects_def by simp
+  from t2 have tro2: "integrity_obj_state aag activate subjects s' s''"
+    unfolding integrity_subjects_def by simp
+
+  have intm: "\<forall>x. integrity_mem aag subjects x
+                  (tcb_states_of_state s) (tcb_states_of_state s'') (auth_ipc_buffers s) X
+                  (underlying_memory (machine_state s) x)
+                  (underlying_memory (machine_state s'') x)" (is "\<forall>x. ?P x s s''")
+  proof
+    fix x
+    from t1 t2 have m1: "?P x s s'" and m2: "?P x s' s''" unfolding integrity_subjects_def by auto
+
+    from m1 show "?P x s s''"
+    proof cases
+      case trm_lrefl thus ?thesis by (rule integrity_mem.intros)
+    next
+      case trm_globals thus ?thesis by (rule integrity_mem.intros)
+    next
+      case trm_orefl
+      from m2 show ?thesis
+      proof cases
+        case (trm_ipc p')
+
+        show ?thesis
+        proof (rule integrity_mem.trm_ipc)
+          from trm_ipc show "case_option False can_receive_ipc (tcb_states_of_state s p')"
+            by (fastforce split: option.splits dest: can_receive_ipc_backward [OF tro1])
+
+          from trm_ipc show "x \<in> auth_ipc_buffers s p'"
+            by (fastforce split: option.splits intro: auth_ipc_buffers_tro [OF tro1])
+        qed (simp_all add: trm_ipc)
+      qed (auto simp add: trm_orefl intro: integrity_mem.intros)
+    next
+      case trm_write thus ?thesis by (rule integrity_mem.intros)
+    next
+      case (trm_ipc p')
+      note trm_ipc1 = trm_ipc
+
+      from m2 show ?thesis
+      proof cases
+        case trm_orefl
+        thus ?thesis using trm_ipc1
+          by (auto intro!: integrity_mem.trm_ipc simp add: restrict_map_Some_iff elim!: tsos_tro_running [OF tro2, rotated])
+      next
+        case (trm_ipc p'')
+        show ?thesis
+        proof (cases "p' = p''")
+          case True thus ?thesis using trm_ipc trm_ipc1 by (simp add: restrict_map_Some_iff)
+        next
+          (* 2 tcbs sharing same IPC buffer, we can appeal to either t1 or t2 *)
+          case False
+          thus ?thesis using trm_ipc1
+            by (auto intro!: integrity_mem.trm_ipc simp add: restrict_map_Some_iff elim!: tsos_tro_running [OF tro2, rotated])
+        qed
+      qed (auto simp add: trm_ipc intro: integrity_mem.intros)
+    qed
+  qed
+
+  moreover have "\<forall>x. integrity_device aag subjects x
+                  (tcb_states_of_state s) (tcb_states_of_state s'')
+                  (device_state (machine_state s) x)
+                  (device_state (machine_state s'') x)" (is "\<forall>x. ?P x s s''")
+  proof
+    fix x
+    from t1 t2 have m1: "?P x s s'" and m2: "?P x s' s''" unfolding integrity_subjects_def by auto
+
+    from m1 show "?P x s s''"
+    proof cases
+      case trd_lrefl thus ?thesis by (rule integrity_device.intros)
+    next
+      case torel1: trd_orefl
+      from m2 show ?thesis
+      proof cases
+        case (trd_lrefl) thus ?thesis by (rule integrity_device.trd_lrefl)
+      next
+        case trd_orefl thus ?thesis
+          by (simp add: torel1)
+      next
+        case trd_write thus ?thesis by (rule integrity_device.trd_write)
+      qed
+    next
+      case trd_write thus ?thesis by (rule integrity_device.intros)
+    qed
+  qed
+  thus ?thesis using tro_trans[OF tro1 tro2] t1 t2 intm
+    apply (clarsimp simp add: integrity_subjects_def simp del:  split_paired_All)
     apply (frule(2) trcdt_trans)
     apply (frule(3) trcdtlist_trans)
     apply (frule(1) trinterrupts_trans[simplified])
+    apply (frule(1) trasids_trans[simplified])
     apply (frule(1) tre_trans[simplified])
     apply (frule(1) trrqs_trans[simplified])
     by blast
@@ -901,19 +1001,48 @@ lemma integrity_refl [simp]:
 
 lemma integrity_update_autarch:
   "\<lbrakk> integrity aag X st s; is_subject aag ptr \<rbrakk>
-     \<Longrightarrow> integrity aag X st (s\<lparr>kheap := kheap s(ptr \<mapsto> obj)\<rparr>)"
+   \<Longrightarrow> integrity aag X st (s\<lparr>kheap := kheap s(ptr \<mapsto> obj)\<rparr>)"
   unfolding integrity_subjects_def
-  by (clarsimp simp: arch_integrity_update_autarch)
+  apply (intro conjI,simp_all)
+   apply clarsimp
+   apply (drule_tac x = x in spec, erule integrity_mem.cases)
+   apply ((auto intro: integrity_mem.intros)+)[4]
+   apply (erule trm_ipc, simp_all)
+   apply (clarsimp simp: restrict_map_Some_iff tcb_states_of_state_def get_tcb_def)
+  apply clarsimp
+  apply (drule_tac x = x in spec, erule integrity_device.cases)
+    apply (erule integrity_device.trd_lrefl)
+   apply (erule integrity_device.trd_orefl)
+   apply (erule integrity_device.trd_write)
+  apply (fastforce elim: integrity_asids_update_autarch)
+  done
 
 lemma set_object_integrity_autarch:
   "\<lbrace>integrity aag X st and K (is_subject aag ptr)\<rbrace> set_object ptr obj \<lbrace>\<lambda>rv. integrity aag X st\<rbrace>"
   apply (wpsimp wp: set_object_wp)
   apply (rule integrity_update_autarch, simp_all)
   done
+end
+
+context pspace_update_eq begin
+
+lemma thread_states[iff]: "thread_states (f s) = thread_states s"
+  by (simp add: thread_states_def pspace get_tcb_def swp_def tcb_states_of_state_def)
+
+lemma thread_bound_ntfns[iff]: "thread_bound_ntfns (f s) = thread_bound_ntfns s"
+  by (simp add: thread_bound_ntfns_def pspace get_tcb_def swp_def split: option.splits)
+
+lemma integrity_update_eq[iff]:
+  "tcb_states_of_state (f s) = tcb_states_of_state s"
+  by (simp add: pspace tcb_states_of_state_def get_tcb_def)
+
+end
+
+context Access_AC_2 begin
 
 lemma eintegrity_sa_update[simp]:
   "integrity aag X st (scheduler_action_update f s) = integrity aag X st s"
-  by (fastforce simp: integrity_subjects_def arch_eintegrity_sa_update)
+  by (fastforce simp: integrity_subjects_def integrity_asids_sa_update)
 
 lemma trans_state_back[simp]:
   "trans_state (\<lambda>_. exst s) s = s"
@@ -1345,14 +1474,21 @@ end
 subsection \<open>Integrity monotony over subjects\<close>
 
 locale Access_AC_3 = Access_AC_2 +
-  assumes arch_integrity_mono:
-    "\<lbrakk> arch_integrity_subjects S aag activate X s s'; S \<subseteq> T; pas_refined aag s; valid_objs s \<rbrakk>
-       \<Longrightarrow> arch_integrity_subjects T aag activate X s s'"
+  assumes integrity_asids_mono:
+    "\<lbrakk> integrity_asids aag S x s s'; S \<subseteq> T; pas_refined aag s; valid_objs s \<rbrakk>
+       \<Longrightarrow> integrity_asids aag T x s (s' :: det_ext state)"
   and arch_integrity_obj_atomic_mono:
     "\<lbrakk> arch_integrity_obj_atomic aag S l ao ao'; S \<subseteq> T; pas_refined aag s; valid_objs s \<rbrakk>
        \<Longrightarrow> arch_integrity_obj_atomic aag T l ao ao'"
   and machine_state_update_state_vrefs[simp]:
     "state_vrefs (machine_state_update f s'') = state_vrefs (s'' :: det_ext state)"
+  and auth_ipc_buffers_member:
+    "\<lbrakk> x \<in> auth_ipc_buffers s p; valid_objs s \<rbrakk>
+       \<Longrightarrow> \<exists>tcb acap. get_tcb p s = Some tcb
+                    \<and> tcb_ipcframe tcb = (cap.ArchObjectCap acap)
+                    \<and> caps_of_state s (p, tcb_cnode_index 4) = Some (ArchObjectCap acap)
+                    \<and> Write \<in> arch_cap_auth_conferred acap
+                    \<and> x \<in> aobj_ref' acap"
 
 
 lemma tcb_bound_notification_reset_integrity_mono:
@@ -1380,22 +1516,30 @@ lemma cdt_change_allowed_mono:
 lemmas rtranclp_monoE = rtranclp_mono[THEN predicate2D,rotated,OF _ predicate2I]
 
 
-context pspace_update_eq begin
-
-lemma thread_states[iff]: "thread_states (f s) = thread_states s"
-  by (simp add: thread_states_def pspace get_tcb_def swp_def tcb_states_of_state_def)
-
-lemma thread_bound_ntfns[iff]: "thread_bound_ntfns (f s) = thread_bound_ntfns s"
-  by (simp add: thread_bound_ntfns_def pspace get_tcb_def swp_def split: option.splits)
-
-lemma integrity_update_eq[iff]:
-  "tcb_states_of_state (f s) = tcb_states_of_state s"
-  by (simp add: pspace tcb_states_of_state_def get_tcb_def)
-
-end
-
-
 context Access_AC_3 begin
+
+lemma trm_ipc':
+  "\<lbrakk> pas_refined aag s; valid_objs s; case_option False can_receive_ipc (tcb_states_of_state s p');
+     (tcb_states_of_state s' p') = Some Structures_A.Running; p \<in> auth_ipc_buffers s p' \<rbrakk>
+     \<Longrightarrow> integrity_mem aag subjects p (tcb_states_of_state s) (tcb_states_of_state s')
+                      (auth_ipc_buffers s) X
+                      (underlying_memory (machine_state s) p)
+                      (underlying_memory (machine_state s') p)"
+  apply (cases "pasObjectAbs aag p' \<in> subjects")
+   apply (rule trm_write)
+   apply (clarsimp simp: )
+   apply (frule pas_refined_mem[rotated])
+    prefer 3
+    apply (rule trm_ipc; fastforce)
+   prefer 2
+   apply (rule bexI)
+    apply assumption
+   apply assumption
+  apply (drule (1) auth_ipc_buffers_member)
+  apply clarsimp
+  apply (drule (1) sta_caps[where cap="ArchObjectCap acap" for acap, simplified])
+   apply (auto simp: cap_auth_conferred_def)
+  done
 
 lemma integrity_mono:
   "\<lbrakk> integrity_subjects S aag activate X s s'; S \<subseteq> T; pas_refined aag s; valid_objs s \<rbrakk>
@@ -1429,8 +1573,17 @@ lemma integrity_mono:
   apply (rule conjI)
    apply (clarsimp simp: integrity_ready_queues_def)
    apply blast
-  apply (simp add: arch_integrity_mono)
+  apply (rule conjI)
+   apply clarsimp
+   apply (drule_tac x=x in spec, erule integrity_mem.cases;
+          blast intro: integrity_mem.intros trm_ipc')
+  apply (rule conjI)
+   apply clarsimp
+   apply (drule_tac x=x in spec, erule integrity_device.cases;
+          blast intro: integrity_device.intros)
+  apply (fastforce elim: integrity_asids_mono)
   done
+
 
 subsection\<open>Access control do not care about machine_state\<close>
 

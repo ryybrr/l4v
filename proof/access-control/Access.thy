@@ -779,6 +779,58 @@ abbreviation cdt_list_integrity_state where
                              (cdt_list s x) (cdt_list s' x))"
 
 
+subsection \<open>How user and device memory can change\<close>
+
+text \<open>
+  The memory integrity relation describes which modification to user memory are allowed by the
+  policy aag when the system is controlled by subjects.
+
+  p is the physical pointer to the concerned memory.
+  ts and ts' are the @{term tcb_states_of_state} of both states
+  icp_buf is the @{term auth_ipc_buffers} of the initial state
+  globals is a deprecated parameter that is used in InfoFlow with the value {}
+         TODO: It would be nice if someone made it disappear.
+  w and w' are the data in the initial and final state.
+
+  The possible reason allowing for a write are :
+  \begin{itemize}
+  \item owning the memory
+  \item being explicitly allowed to write by the policy
+  \item The pointer is in the "globals" set. This is an obsolete concept and will be removed
+  \item The thread is receiving an IPC, and we write to its IPC buffer
+        We indirectly use the constraints of tro (@{term integrity_obj})
+        to decide when to allow that in order to avoid duplicating the definitions.
+
+  Inductive for now, we should add something about user memory/transitions.
+\<close>
+
+inductive integrity_mem for aag subjects p ts ts' ipcbufs globals w w' where
+  trm_lrefl:
+    "pasObjectAbs aag p \<in> subjects \<Longrightarrow> integrity_mem aag subjects p ts ts' ipcbufs globals w w'"
+| trm_orefl:
+    "w = w' \<Longrightarrow> integrity_mem aag subjects p ts ts' ipcbufs globals w w'"
+| trm_write:
+    "aag_subjects_have_auth_to subjects aag Write p
+     \<Longrightarrow> integrity_mem aag subjects p ts ts' ipcbufs globals w w'"
+| trm_globals:
+    "p \<in> globals \<Longrightarrow> integrity_mem aag subjects p ts ts' ipcbufs globals w w'"
+| trm_ipc:
+    "\<lbrakk> case_option False can_receive_ipc (ts p');
+       ts' p' = Some Running; p \<in> ipcbufs p'; pasObjectAbs aag p' \<notin> subjects \<rbrakk>
+       \<Longrightarrow> integrity_mem aag subjects p ts ts' ipcbufs globals w w'"
+
+abbreviation
+  "memory_integrity X aag x t1 t2 ipc \<equiv> integrity_mem (aag :: 'a PAS) {pasSubject aag} x t1 t2 ipc X"
+
+inductive integrity_device for aag subjects p ts ts' w w' where
+  trd_lrefl:
+    "pasObjectAbs aag p \<in> subjects \<Longrightarrow> integrity_device aag subjects p ts ts' w w'"
+| trd_orefl:
+    "w = w' \<Longrightarrow> integrity_device aag subjects p ts ts' w w'"
+| trd_write:
+    "aag_subjects_have_auth_to subjects aag Write p \<Longrightarrow> integrity_device aag subjects p ts ts' w w'"
+
+
 subsection \<open>How other stuff can change\<close>
 
 definition integrity_interrupts ::
@@ -810,7 +862,14 @@ definition integrity_subjects ::
                                (interrupt_irq_node s' x, interrupt_states s' x))
    \<and> (\<forall>d p. integrity_ready_queues aag subjects (pasDomainAbs aag d) (ready_queues s d p)
                                    (ready_queues s' d p))
-   \<and> arch_integrity_subjects subjects aag activate X s s'"
+   \<and> (\<forall>x. integrity_mem aag subjects x (tcb_states_of_state s) (tcb_states_of_state s')
+                        (auth_ipc_buffers s) X
+                        (underlying_memory (machine_state s) x)
+                        (underlying_memory (machine_state s') x))
+   \<and> (\<forall>x. integrity_device aag subjects x (tcb_states_of_state s) (tcb_states_of_state s')
+                           (device_state (machine_state s) x)
+                           (device_state (machine_state s') x))
+   \<and> (\<forall>x. integrity_asids aag subjects x s s')"
 
 abbreviation "integrity pas \<equiv> integrity_subjects {pasSubject pas} pas (pasMayActivate pas)"
 

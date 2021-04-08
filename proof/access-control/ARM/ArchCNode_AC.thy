@@ -16,28 +16,29 @@ declare arch_post_modify_registers_def[simp]
 declare arch_post_cap_deletion_def[simp]
 declare arch_cap_cleanup_opt_def[simp]
 declare arch_mask_irq_signal_def[simp]
-declare arch_integrity_subjects_def[simp]
+(* FIXME ryanb: abbreviation instead? *)
+declare integrity_asids_aux_def[simp]
 
 named_theorems CNode_AC_assms
 
-lemma arch_integrity_kheap_update[CNode_AC_assms, simp]:
-  "arch_integrity_subjects subjects aag activate X s (kheap_update f s)"
-  by clarsimp
+lemma integrity_asids_kheap_update[CNode_AC_assms, simp]:
+  "integrity_asids aag subjects x s (kheap_update f s)"
+  by (clarsimp simp: integrity_asids_def)
 
-lemma arch_integrity_cdt_update[CNode_AC_assms, simp]:
-  "arch_integrity_subjects subjects aag activate X st (cdt_update f s) =
-   arch_integrity_subjects subjects aag activate X st s"
-  by simp
+lemma integrity_asids_cdt_update[CNode_AC_assms, simp]:
+  "integrity_asids aag subjects x st (cdt_update f s) =
+   integrity_asids aag subjects x st s"
+  by (clarsimp simp: integrity_asids_def)
 
-lemma arch_integrity_is_original_cap_update[CNode_AC_assms, simp]:
-  "arch_integrity_subjects subjects aag activate X st (is_original_cap_update f s) =
-   arch_integrity_subjects subjects aag activate X st s"
-  by simp
+lemma integrity_asids_is_original_cap_update[CNode_AC_assms, simp]:
+  "integrity_asids aag subjects x st (is_original_cap_update f s) =
+   integrity_asids aag subjects x st s"
+  by (clarsimp simp: integrity_asids_def)
 
-lemma arch_integrity_interrupt_states_update[CNode_AC_assms, simp]:
-  "arch_integrity_subjects subjects aag activate X st (interrupt_states_update f s) =
-   arch_integrity_subjects subjects aag activate X st s"
-  by simp
+lemma integrity_asids_interrupt_states_update[CNode_AC_assms, simp]:
+  "integrity_asids aag subjects x st (interrupt_states_update f s) =
+   integrity_asids aag subjects x st s"
+  by (clarsimp simp: integrity_asids_def)
 
 lemma sata_cdt_update[CNode_AC_assms, simp]:
   "state_asids_to_policy aag (cdt_update f s) = state_asids_to_policy aag s"
@@ -104,20 +105,10 @@ lemma set_cap_state_vrefs[CNode_AC_assms, wp]:
              split: if_split_asm simp: vs_refs_no_global_pts_def)
   done
 
-lemma dmo_no_mem_arch_integrity[CNode_AC_assms]:
-  assumes p: "\<And>P. mop \<lbrace>\<lambda>s. P (underlying_memory s)\<rbrace>"
-  assumes q: "\<And>P. mop \<lbrace>\<lambda>s. P (device_state s)\<rbrace>"
-  shows "do_machine_op mop \<lbrace>arch_integrity_subjects subjects aag activate X s\<rbrace>"
-  unfolding do_machine_op_def integrity_def
-  apply wpsimp
-  apply (rule conjI; clarsimp)
-   apply (rename_tac x)
-   apply (drule_tac x = x in spec)+
-   apply (erule (1) use_valid [OF _ p])
-  apply (rename_tac x )
-  apply (drule_tac x = x in spec)+
-  apply (erule (1) use_valid [OF _ q])
-  done
+lemma integrity_asids_machine_state_update[CNode_AC_assms]:
+ "integrity_asids aag subjects x st (s\<lparr>machine_state := b\<rparr>) =
+  integrity_asids aag subjects x st s"
+  by (clarsimp simp: integrity_asids_def)
 
 crunches maskInterrupt
   for underlying_memory[CNode_AC_assms, wp]: "\<lambda>s. P (underlying_memory s)"
@@ -186,7 +177,7 @@ lemma list_integ_lift[CNode_AC_assms]:
   assumes rq: "\<And>P. f \<lbrace>\<lambda>s. P (ready_queues s)\<rbrace>"
   shows "\<lbrace>integrity aag X st and Q\<rbrace> f \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   apply (rule hoare_pre)
-   apply (unfold integrity_def[abs_def])
+   apply (unfold integrity_def[abs_def] integrity_asids_def)
    apply (simp only: integrity_cdt_list_as_list_integ)
    apply (rule hoare_lift_Pf2[where f="ekheap"])
     apply (simp add: tcb_states_of_state_def get_tcb_def)
@@ -197,6 +188,7 @@ lemma list_integ_lift[CNode_AC_assms]:
 
 end
 
+find_theorems name: list_integ_lift
 
 global_interpretation CNode_AC_1?: CNode_AC_1
 proof goal_cases
@@ -208,15 +200,9 @@ qed
 
 context Arch begin global_naming ARM_A
 
-lemma arch_integrity_set_cap_Nullcap[CNode_AC_assms]:
-  "\<lbrace>(=) s\<rbrace> set_cap NullCap slot \<lbrace>\<lambda>_. arch_integrity_subjects subjects aag activate X s\<rbrace>"
-  apply (unfold arch_integrity_subjects_def)
-  apply (wp hoare_wp_combs)
-    apply (wpsimp wp: set_object_wp get_object_wp simp: set_cap_def)
-   apply wps
-   apply wp
-  apply (clarsimp simp: cte_wp_at_caps_of_state obj_at_def)
-  done
+lemma integrity_asids_set_cap_Nullcap[CNode_AC_assms]:
+  "\<lbrace>(=) s\<rbrace> set_cap NullCap slot \<lbrace>\<lambda>_. integrity_asids aag subjects x s\<rbrace>"
+  unfolding integrity_asids_def by wpsimp
 
 crunches set_original
   for state_asids_to_policy[CNode_AC_assms, wp]: "\<lambda>s. P (state_asids_to_policy aag s)"

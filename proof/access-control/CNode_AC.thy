@@ -13,17 +13,17 @@ section\<open>CNode-specific AC.\<close>
 locale CNode_AC_1 =
   fixes aag :: "'a PAS"
   and val_t :: "'b"
-  assumes arch_integrity_kheap_update[simp]:
-    "\<And>f. arch_integrity_subjects subjects aag activate X s (kheap_update f s)"
+  assumes arch_integrity_kheap_update[simp]: (* FIXME ryanb: better name? *)
+    "\<And>f. integrity_asids aag subjects x s (kheap_update f s)"
   assumes arch_integrity_cdt_update[simp]:
-    "\<And>f. arch_integrity_subjects subjects aag activate X st (cdt_update f s) =
-          arch_integrity_subjects subjects aag activate X st s"
+    "\<And>f. integrity_asids aag subjects x st (cdt_update f s) =
+          integrity_asids aag subjects x st s"
   and arch_integrity_is_original_cap_update[simp]:
-    "\<And>f. arch_integrity_subjects subjects aag activate X st (is_original_cap_update f s) =
-          arch_integrity_subjects subjects aag activate X st s"
+    "\<And>f. integrity_asids aag subjects x st (is_original_cap_update f s) =
+         integrity_asids aag subjects x st s"
   and arch_integrity_interrupt_states_update[simp]:
-    "\<And>f. arch_integrity_subjects subjects aag activate X st (interrupt_states_update f s) =
-          arch_integrity_subjects subjects aag activate X st s"
+    "\<And>f. integrity_asids aag subjects x st (interrupt_states_update f s) =
+          integrity_asids aag subjects x st s"
   and sata_cdt_update[simp]:
     "\<And>f. state_asids_to_policy aag (cdt_update f s) = state_asids_to_policy aag s"
   and sata_is_original_cap_update[simp]:
@@ -51,9 +51,9 @@ locale CNode_AC_1 =
        cap_links_asid_slot aag (pasObjectAbs aag (fst ptr')) cap';
        state_asids_to_policy_arch aag caps (as :: arch_state) vrefs \<subseteq> pasPolicy aag \<rbrakk>
        \<Longrightarrow> state_asids_to_policy_arch aag (caps(ptr \<mapsto> cap, ptr' \<mapsto> cap')) as vrefs \<subseteq> pasPolicy aag"
-  and dmo_no_mem_arch_integrity:
-    "\<lbrakk> \<And>P. mop \<lbrace>\<lambda>s. P (underlying_memory s)\<rbrace>; \<And>P. mop \<lbrace>\<lambda>s. P (device_state s)\<rbrace> \<rbrakk>
-       \<Longrightarrow> do_machine_op (mop :: unit machine_monad) \<lbrace>arch_integrity_subjects subjects aag activate X s\<rbrace>"
+and integrity_asids_machine_state_update:
+ "integrity_asids aag subjects x st (s\<lparr>machine_state := b\<rparr>) =
+  integrity_asids aag subjects x st s"
   and state_vrefs_tcb_upd:
     "get_tcb tptr s = Some y \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(tptr \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
   and state_vrefs_simple_type_upd:
@@ -401,13 +401,24 @@ lemma cap_swap_for_delete_respects[wp]:
   by (wpsimp simp: cap_swap_for_delete_def)
 
 lemma dmo_no_mem_respects:
-  assumes p: "\<And>P. mop \<lbrace>\<lambda>s. P (underlying_memory s)\<rbrace>"
-  assumes q: "\<And>P. mop \<lbrace>\<lambda>s. P (device_state s)\<rbrace>"
-  shows "do_machine_op (mop :: unit machine_monad) \<lbrace>integrity aag X st\<rbrace>"
-  unfolding integrity_def
-  apply (simp only: conj_assoc[symmetric])+
-  apply (rule hoare_vcg_conj_lift)
-  by (wpsimp simp: split_def do_machine_op_def wp: dmo_no_mem_arch_integrity[OF p q])+
+  assumes p: "\<And>P. \<lbrace>\<lambda>ms. P (underlying_memory ms)\<rbrace> mop \<lbrace>\<lambda>_ ms. P (underlying_memory ms)\<rbrace>"
+  assumes q: "\<And>P. \<lbrace>\<lambda>ms. P (device_state ms)\<rbrace> mop \<lbrace>\<lambda>_ ms. P (device_state ms)\<rbrace>"
+  shows "\<lbrace>integrity aag X st\<rbrace> do_machine_op mop \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
+  unfolding do_machine_op_def
+  apply (rule hoare_pre)
+  apply (simp add: split_def)
+  apply (wp )
+  apply (clarsimp simp: integrity_def)
+  apply (rule conjI)
+   apply clarsimp
+   apply (drule_tac x = x in spec)+
+   apply (erule (1) use_valid [OF _ p])
+  apply (rule conjI)
+  apply clarsimp
+  apply (drule_tac x = x in spec)+
+   apply (erule (1) use_valid [OF _ q])
+  apply (clarsimp simp: integrity_asids_machine_state_update)
+  done
 
 lemma set_irq_state_respects[wp]:
   "\<lbrace>integrity aag X st and K (is_subject_irq aag irq)\<rbrace>
@@ -446,18 +457,6 @@ context CNode_AC_1 begin
 
 crunch respects[wp]: deleted_irq_handler "integrity aag X st"
 
-context begin interpretation Arch .
-
-(* FIXME ryanb: arch_split *)
-
-lemma arch_post_cap_deletion_integrity:
-  "\<lbrace>integrity aag X s \<rbrace> arch_post_cap_deletion x12 \<lbrace>\<lambda>rv. integrity aag X s\<rbrace>"
-  unfolding arch_post_cap_deletion_def
-  apply wp
-  done
-
-end
-
 lemma post_cap_deletion_integrity[wp]:
  "\<lbrace>integrity aag X s and K (cleanup_info_wf cleanup_info aag)\<rbrace>
   post_cap_deletion cleanup_info
@@ -495,8 +494,8 @@ end
 
 
 locale CNode_AC_2 = CNode_AC_1 +
-  assumes arch_integrity_set_cap_Nullcap:
-    "\<lbrace>(=) s\<rbrace> set_cap NullCap slot \<lbrace>\<lambda>_. arch_integrity_subjects subjects aag activate X s\<rbrace>"
+  assumes integrity_asids_set_cap_Nullcap:
+    "\<lbrace>(=) s\<rbrace> set_cap NullCap slot \<lbrace>\<lambda>_. integrity_asids aag subjects x (s :: det_ext state)\<rbrace>"
   and set_original_state_asids_to_policy[wp]:
     "\<And>P. set_original slot v \<lbrace>\<lambda>s. P (state_asids_to_policy aag s)\<rbrace>"
   and set_original_state_objs_to_policy[wp]:
@@ -579,7 +578,7 @@ lemma set_cap_integrity_deletion_aux:
          apply wp+
     apply (wp get_object_wp)
    apply wps
-   apply (wp arch_integrity_set_cap_Nullcap)
+   apply (wp integrity_asids_set_cap_Nullcap hoare_vcg_all_lift)
   apply (safe ; clarsimp simp add: cte_wp_at_caps_of_state dest!: ko_atD)
        (* cnode *)
        subgoal for s obj addr cnode_size content cap'
