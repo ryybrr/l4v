@@ -976,31 +976,21 @@ apply auto
 done
 
 
-lemma pt_lookup_slot_from_level_is_subject:
+lemma pt_walk_is_subject:
   "\<lbrakk> pas_refined aag s; valid_vspace_objs s; valid_asid_table s; pspace_aligned s;
-     pt_lookup_slot_from_level level bot_level pt_ptr vptr (ptes_of s) = Some (level', pt);
+     pt_walk level bot_level pt_ptr vptr (ptes_of s) = Some (level', pt);
      (\<exists>asid. vs_lookup_table level asid vptr s = Some (level, pt_ptr));
      level \<le> max_pt_level; vptr \<in> user_region; is_subject aag pt_ptr \<rbrakk>
-     \<Longrightarrow> is_subject aag (table_base pt)"
-apply (clarsimp simp: pt_lookup_slot_from_level_def obind_def split: option.splits)
-apply (drule (4) pt_walk_is_subject)
-defer
-apply clarsimp+
-apply (subst pt_slot_offset_id)
-apply (erule pt_walk_is_aligned)
-apply (erule vs_lookup_table_is_aligned)
-apply clarsimp+
-apply fastforce
-done
+     \<Longrightarrow> is_subject aag pt"
+oops
 
-thm pt_lookup_slot_def
-pt_lookup_slot_from_level_def
+
 
 
 lemma unmap_page_respects:
-  "\<lbrace>integrity aag X st and pspace_aligned and valid_vspace_objs and valid_arch_state
+  "\<lbrace>integrity aag X st and pspace_aligned and valid_vspace_objs
                        and K (is_subject_asid aag asid) and pas_refined aag
-                       and K (vptr \<in> user_region)\<rbrace>
+                       and K (vmsz_aligned vptr sz \<and> vptr \<in> user_region)\<rbrace>
    unmap_page sz asid vptr pptr
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   apply (rule hoare_gen_asm)
@@ -1015,65 +1005,7 @@ lemma unmap_page_respects:
                                    and Q="integrity aag X st"]
           | wp (once) hoare_drop_imps[where R="\<lambda>rv s. rv"])+
 
-apply (clarsimp simp: pt_lookup_slot_def)
-apply (frule pt_lookup_slot_from_level_is_subject)
-apply (fastforce intro: valid_arch_state_asid_table)+
 
-apply (clarsimp simp: vspace_for_asid_def)
-apply (fastforce simp: vs_lookup_table_def obind_def split: option.splits)
-apply clarsimp
-apply clarsimp
-prefer 2
-apply clarsimp
-
-apply (erule (1) is_subject_asid_trans)
-
-apply (prop_tac "\<exists>pool_ptr pool. asid_table s (asid_high_bits_of asid) = Some pool_ptr \<and>
-asid_pools_of s pool_ptr = Some pool")
-apply (simp add: vspace_for_asid_def obind_def pool_for_asid_def
-vspace_for_pool_def
- split: option.splits)
-
-apply (clarsimp simp: pas_refined_def)
-apply (erule subsetD) back
-apply (rule sata_asid_lookup)
-apply simp
-
-apply (simp add: state_vrefs_def)
-
-apply (rule exI)
-apply (rule conjI)
-apply (rule exI, rule exI, rule conjI, rule refl)
-
-apply (rule_tac x=asid_pool_level in exI)
-apply (rule_tac x=asid in exI)
-apply (rule_tac x=vptr in exI)
-apply (rule conjI)
-apply (clarsimp simp: vs_lookup_table_def obind_def split: option.splits)
-apply (rule conjI)
-apply (clarsimp simp: vspace_for_asid_def)
-apply clarsimp
-apply (rule conjI)
-apply (rule refl)
-apply (clarsimp simp: vspace_for_asid_def pool_for_asid_def)
-apply (clarsimp simp: vspace_for_asid_def)
-
-apply (clarsimp simp: opt_map_def split: option.splits)
-apply simp
-
-apply (clarsimp simp: vs_refs_aux_def graph_of_def)
-apply (clarsimp simp: vspace_for_asid_def obind_def vspace_for_pool_def
-pool_for_asid_def
-opt_map_def map_set_in
-split: option.splits)
-apply (rule exI)
-apply auto
-
-apply (subst ucast_up_ucast[symmetric])
-prefer 2
-apply (subst asid_low_bits_of_mask_eq)
-apply simp
-  apply (simp add: is_up_def source_size_def target_size_def word_size)
   done
 
 (*
@@ -1104,8 +1036,7 @@ lemma invalidate_tlb_by_asid_pas_refined[wp]:
 lemma perform_page_invocation_respects:
   "\<lbrace>integrity aag X st and pas_refined aag and K (authorised_page_inv aag pgi)
                        and valid_page_inv pgi and valid_vspace_objs
-                       and pspace_aligned and valid_vspace_objs and valid_arch_state
-                       and is_subject aag  \<circ> cur_thread\<rbrace>
+                       and pspace_aligned and is_subject aag  \<circ> cur_thread\<rbrace>
    perform_page_invocation pgi
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
 proof -
@@ -1126,7 +1057,7 @@ sfence_def
             split: page_invocation.split sum.split
                    arch_cap.split option.split,
          safe)
-        apply (wp set_cap_integrity_autarch unmap_page_respects
+        apply (wp set_cap_integrity_autarch
                   mapM_x_and_const_wp[OF store_pte_respects] store_pte_respects
                | elim conjE
                | clarsimp dest!: set_tl_subset_mp
@@ -1135,27 +1066,14 @@ sfence_def
 
 
    apply (clarsimp simp: cte_wp_at_caps_of_state cap_rights_update_def
-                         acap_rights_update_def update_map_data_def
+                         acap_rights_update_def update_map_data_def is_pg_cap_def
                          valid_page_inv_def valid_cap_simps
                   dest!: cap_master_cap_eqDs)
-
-apply (rule conjI)
-prefer 2
-
-apply (case_tac m; clarsimp)
-apply (clarsimp simp: valid_arch_cap_def wellformed_mapdata_def split: if_splits)
-apply (case_tac m; clarsimp)
-apply (clarsimp simp: aag_cap_auth_def)
-
-apply (prop_tac "a \<in> acap_asid' (FrameCap r R sz dev (Some (a,b)))")
-apply (clarsimp)
-apply (drule (1) sata_asid[where aag=aag])
-apply (clarsimp simp: pas_refined_def)
-apply (drule (1) subsetD)
-apply (fastforce dest: aag_wellformed_Control)
-apply (simp add: perform_pg_inv_get_addr_def)
-    apply (wpsimp wp: set_mrs_integrity_autarch set_message_info_integrity_autarch
-                simp: ipc_buffer_has_auth_def)+
+   apply (drule (1) clas_caps_of_state)
+   apply (simp add: cap_links_asid_slot_def label_owns_asid_slot_def)
+   apply (auto dest: pas_refined_Control)[1]
+     apply (wpsimp wp: set_mrs_integrity_autarch set_message_info_integrity_autarch
+                 simp: ipc_buffer_has_auth_def)+
   done
 qed
 
@@ -1196,9 +1114,6 @@ lemma perform_page_invocation_pas_refined [wp]:
                           pte_ref_def[simplified aag_cap_auth_def])+
   done
 
-
-*)
-
 definition authorised_asid_control_inv :: "'a PAS \<Rightarrow> asid_control_invocation \<Rightarrow> bool" where
  "authorised_asid_control_inv aag aci \<equiv>
   case aci of MakePool frame slot parent base \<Rightarrow>
@@ -1207,57 +1122,42 @@ definition authorised_asid_control_inv :: "'a PAS \<Rightarrow> asid_control_inv
             (\<forall>x \<in> {frame..frame + 2 ^ pageBits - 1}. is_subject aag x)"
 
 
-lemma integrity_asid_table_entry_update':
-  "\<lbrakk> integrity aag X st s; atable = riscv_asid_table (arch_state s);
+lemma integrity_arm_asid_table_entry_update':
+  "\<lbrakk> integrity aag X st s; atable = arm_asid_table (arch_state s);
      (\<forall>asid'. asid' \<noteq> 0 \<and> asid_high_bits_of asid' = asid_high_bits_of asid
              \<longrightarrow> is_subject_asid aag asid') \<rbrakk>
-     \<Longrightarrow> integrity aag X st (s\<lparr>arch_state := arch_state s\<lparr>riscv_asid_table :=
+     \<Longrightarrow> integrity aag X st (s\<lparr>arch_state := arch_state s\<lparr>arm_asid_table :=
                                                           \<lambda>a. if a = asid_high_bits_of asid
                                                               then v
                                                               else atable a\<rparr>\<rparr>)"
   by (clarsimp simp: integrity_def)
 
-
-lemma asid_table_entry_update_integrity[wp]:
- "\<lbrace>integrity aag X st and (\<lambda> s. atable = riscv_asid_table (arch_state s)) and
+lemma arm_asid_table_entry_update_integrity[wp]:
+ "\<lbrace>integrity aag X st and (\<lambda> s. atable = arm_asid_table (arch_state s)) and
    K (\<forall>asid'. asid' \<noteq> 0 \<and> asid_high_bits_of asid' = asid_high_bits_of asid
               \<longrightarrow> is_subject_asid aag asid')\<rbrace>
-  modify (\<lambda>s. s\<lparr>arch_state := arch_state s\<lparr>riscv_asid_table := atable(asid_high_bits_of asid := v)\<rparr>\<rparr>)
+  modify (\<lambda>s. s\<lparr>arch_state := arch_state s\<lparr>arm_asid_table := atable(asid_high_bits_of asid := v)\<rparr>\<rparr>)
   \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   apply (wp | simp)+
-  apply (blast intro: integrity_asid_table_entry_update')
+  apply (blast intro: integrity_arm_asid_table_entry_update')
   done
 
 lemma perform_asid_control_invocation_respects:
-  "\<lbrace>integrity aag X st and invs and valid_aci aci and K (authorised_asid_control_inv aag aci)\<rbrace>
+  "\<lbrace>integrity aag X st and K (authorised_asid_control_inv aag aci)\<rbrace>
    perform_asid_control_invocation aci
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   apply (simp add: perform_asid_control_invocation_def)
   apply (rule hoare_pre)
    apply (wpc, simp)
-   apply_trace (wpsimp wp: set_cap_integrity_autarch cap_insert_integrity_autarch
-                     retype_region_integrity[where sz=12] static_imp_wp
-delete_objects_valid_vspace_objs delete_objects_valid_arch_state
-)
+   apply (wpsimp wp: set_cap_integrity_autarch cap_insert_integrity_autarch
+                     retype_region_integrity[where sz=12] static_imp_wp)
   apply (clarsimp simp: authorised_asid_control_inv_def
                         ptr_range_def page_bits_def add.commute
                         range_cover_def obj_bits_api_def default_arch_object_def
                         pageBits_def word_bits_def)
   apply (subst is_aligned_neg_mask_eq[THEN sym], assumption)
   apply (simp add: and_mask_eq_iff_shiftr_0 mask_zero)
-apply (intro conjI)
-apply (clarsimp simp: word_size_bits_def)
-apply clarsimp
-
-apply (clarsimp simp: valid_aci_def)
-apply (rule_tac x=aa in exI)
-apply (rule_tac x=ba in exI)
-
-apply (erule cte_wp_at_weakenE)
-apply (clarsimp simp: descendants_range_def pageBits_def)
   done
-
-(*
 
 lemma pas_refined_set_asid_strg:
   "pas_refined aag s \<and> is_subject aag pool \<and>
@@ -1363,8 +1263,6 @@ lemma perform_asid_control_invocation_pas_refined [wp]:
   apply (fastforce dest: cte_wp_at_valid_objs_valid_cap simp: valid_cap_def cap_aligned_def)
   done
 
-*)
-
 definition authorised_asid_pool_inv :: "'a PAS \<Rightarrow> asid_pool_invocation \<Rightarrow> bool" where
  "authorised_asid_pool_inv aag api \<equiv>
   case api of Assign asid pool_ptr ct_slot \<Rightarrow>
@@ -1372,111 +1270,14 @@ definition authorised_asid_pool_inv :: "'a PAS \<Rightarrow> asid_pool_invocatio
     (\<forall>asid'. asid_high_bits_of asid' = asid_high_bits_of asid \<and> asid' \<noteq> 0
              \<longrightarrow> is_subject_asid aag asid')"
 
-(* Borrowed from part of copy_global_mappings_nonempty_table in Untyped_R.thy *)
-lemma copy_global_mappings_index_subset:
-  "set [pt_index max_pt_level pptr_base .e. 2 ^ ptTranslationBits - 1] \<subseteq> {x. \<exists>y. x = y >> 20}"
-  apply clarsimp
-  apply (rule_tac x="x << 20" in exI)
-  apply (subst shiftl_shiftr1, simp)
-  apply (simp add: word_size)
-  apply (rule sym, rule less_mask_eq)
-  apply (simp add: word_leq_minus_one_le ptTranslationBits_def pageBits_def)
-  done
-
-(*
-lemma pd_shifting':
-   "is_aligned pd pd_bits \<Longrightarrow>
-    (pd + (vptr >> 20 << 2) && ~~ mask pd_bits) = (pd::word32)"
-  apply (simp add: pd_bits_def pageBits_def)
-  apply (rule word_eqI[rule_format])
-  apply (subst word_plus_and_or_coroll)
-   apply (rule word_eqI)
-   apply (clarsimp simp: word_size nth_shiftr nth_shiftl is_aligned_nth)
-   apply (erule_tac x=na in allE)
-   apply (simp add: linorder_not_less)
-   apply (drule test_bit_size)+
-   apply (simp add: word_size)
-  apply (clarsimp simp: word_size nth_shiftr nth_shiftl is_aligned_nth
-                        word_ops_nth_size pd_bits_def linorder_not_less)
-  apply (rule iffI)
-   apply clarsimp
-   apply (drule test_bit_size)+
-   apply (simp add: word_size)
-  apply clarsimp
-  apply (erule_tac x=n in allE)
-  apply simp
-  done
-*)
-
-
-
-lemma "(xa << y) && mask z = xa << y"
-thm mask_shiftl_decompose
-apply (simp add: pt_index_def pt_bits_def table_size_def shiftl_over_and_dist mask_shiftl_decompose
-                word_bool_alg.conj_ac)
-oops
-
-lemma pt_slot_offset_id':
-  "is_aligned pt_ptr pt_bits \<Longrightarrow>
-mask pt_bits && (xa << pte_bits) = xa << pte_bits \<Longrightarrow>
-table_base (pt_ptr + (xa << pte_bits)) = pt_ptr"
-  apply (simp add: pt_slot_offset_def is_aligned_mask_out_add_eq mask_eq_x_eq_0[symmetric])
-apply (simp add: pt_index_def pt_bits_def table_size_def shiftl_over_and_dist mask_shiftl_decompose
-                word_bool_alg.conj_ac)
-done
-
-lemma copy_global_mappings_integrity:
-  "\<lbrace>integrity aag X st and K (is_aligned x pt_bits \<and> is_subject aag x)\<rbrace>
-       copy_global_mappings x
-       \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
-  apply (rule hoare_gen_asm)
-  apply (simp add: copy_global_mappings_def)
-  apply (wp mapM_x_wp[OF _ subset_refl] store_pte_respects)
-apply (simp only: pt_index_def)
-apply (subst pt_slot_offset_id')
-apply simp
-apply (clarsimp simp: pte_bits_def word_size_bits_def pt_bits_def table_size_def ptTranslationBits_def mask_def)
-apply (word_bitwise)
-apply auto[1]
-apply clarsimp
-   apply wpsimp+
-  done
-
-thm valid_arch_inv_def
 lemma perform_asid_pool_invocation_respects:
-  "\<lbrace>integrity aag X st and pas_refined aag and invs and valid_apinv api and K (authorised_asid_pool_inv aag api)\<rbrace>
+  "\<lbrace>integrity aag X st and K (authorised_asid_pool_inv aag api)\<rbrace>
    perform_asid_pool_invocation api
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
-  apply (unfold perform_asid_pool_invocation_def store_asid_pool_entry_def)
-  apply (wpsimp wp: set_asid_pool_integrity_autarch get_cap_wp set_cap_integrity_autarch
-copy_global_mappings_integrity
-hoare_drop_imps
-)
+  apply (simp add: perform_asid_pool_invocation_def)
+  apply (wpsimp wp: set_asid_pool_integrity_autarch get_cap_wp set_cap_integrity_autarch)
   apply (auto iff: authorised_asid_pool_inv_def)
-defer
-
-thm valid_apinv_def
-apply (clarsimp simp: valid_apinv_def)
-apply (clarsimp simp: cte_wp_at_caps_of_state is_cap_simps)
-apply (case_tac m; clarsimp)
-
-apply (frule_tac ptr="(a,b)" in sbta_caps)
-apply simp
-apply (simp add: cap_auth_conferred_def arch_cap_auth_conferred_def)
-apply (erule (1) is_subject_trans) back
-apply (fastforce simp: pas_refined_def auth_graph_map_def state_objs_to_policy_def)
-
-
-apply (clarsimp simp: valid_apinv_def)
-apply (clarsimp simp: cte_wp_at_caps_of_state is_cap_simps)
-apply (case_tac m; clarsimp)
-apply (rule_tac s=s in is_aligned_pt)
-apply (frule (1) caps_of_state_valid)
-apply (clarsimp simp: valid_cap_def)
-apply fastforce
-done
-
-(*
+  done
 
 lemma asid_pool_into_aag:
   "\<lbrakk> kheap s p = Some (ArchObj (ASIDPool pool)); pool r = Some p'; pas_refined aag s \<rbrakk>
@@ -1535,22 +1336,33 @@ lemma perform_asid_pool_invocation_pas_refined [wp]:
 definition authorised_page_directory_inv :: "'a PAS \<Rightarrow> page_directory_invocation \<Rightarrow> bool" where
   "authorised_page_directory_inv aag pdi \<equiv> True"
 
-*)
-
 definition authorised_arch_inv :: "'a PAS \<Rightarrow> arch_invocation \<Rightarrow> bool" where
  "authorised_arch_inv aag ai \<equiv> case ai of
      InvokePageTable pti \<Rightarrow> authorised_page_table_inv aag pti
+   | InvokePageDirectory pdi \<Rightarrow> authorised_page_directory_inv aag pdi
    | InvokePage pgi \<Rightarrow> authorised_page_inv aag pgi
    | InvokeASIDControl aci \<Rightarrow> authorised_asid_control_inv aag aci
    | InvokeASIDPool api \<Rightarrow> authorised_asid_pool_inv aag api"
 
-(*
 crunch respects [wp]: perform_page_directory_invocation "integrity aag X st"
   (ignore: do_machine_op)
 
 crunch pas_refined [wp]: perform_page_directory_invocation "pas_refined aag"
 *)
+*)
+*)
 
+thm authorised_page_table_inv
+term valid_pti
+term is_final_cap'
+term gen_obj_refs
+
+(* Need:
+   -perform_page_table_invocation
+   -perform_page_invocation
+   -perform_asid_control_invocation
+   -perform_asid_pool_invocation
+*)
 lemma invoke_arch_respects:
   "\<lbrace>integrity aag X st and K (authorised_arch_inv aag ai) and
     pas_refined aag and invs and valid_arch_inv ai and is_subject aag \<circ> cur_thread\<rbrace>
