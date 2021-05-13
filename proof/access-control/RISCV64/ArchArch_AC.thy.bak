@@ -1,0 +1,52 @@
+(*
+ * Copyright 2020, Data61, CSIRO (ABN 41 687 119 230)
+ *
+ * SPDX-License-Identifier: GPL-2.0-only
+ *)
+
+theory ArchArch_AC
+imports Arch_AC
+begin
+
+text\<open>
+
+Arch-specific access control.
+
+\<close>
+
+global_interpretation Arch_AC_1?: Arch_AC_1
+proof goal_cases
+  interpret Arch .
+  case 1 show ?case
+    sorry
+qed
+
+definition authorised_arch_inv :: "'a PAS \<Rightarrow> arch_invocation \<Rightarrow> bool" where
+ "authorised_arch_inv aag ai \<equiv> True"
+
+lemma invoke_arch_pas_refined:
+  "\<lbrace>pas_refined aag and pas_cur_domain aag and invs and ct_active
+                    and valid_arch_inv ai and K (authorised_arch_inv aag ai)\<rbrace>
+   arch_perform_invocation ai
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+  sorry
+
+
+lemma invoke_arch_respects:
+  "\<lbrace>integrity aag X st and K (authorised_arch_inv aag ai) and
+    pas_refined aag and invs and valid_arch_inv ai and is_subject aag \<circ> cur_thread\<rbrace>
+   arch_perform_invocation ai
+   \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
+  sorry
+
+lemma decode_arch_invocation_authorised:
+  "\<lbrace>invs and pas_refined aag and cte_wp_at ((=) (cap.ArchObjectCap cap)) slot
+         and (\<lambda>s. \<forall>(cap, slot) \<in> set excaps. cte_wp_at ((=) cap) slot s)
+         and K (\<forall>(cap, slot) \<in> {(cap.ArchObjectCap cap, slot)} \<union> set excaps.
+                  aag_cap_auth aag (pasObjectAbs aag (fst slot)) cap \<and> is_subject aag (fst slot) \<and>
+                  (\<forall>v \<in> cap_asid' cap. is_subject_asid aag v))\<rbrace>
+   arch_decode_invocation label msg x_slot slot cap excaps
+   \<lbrace>\<lambda>rv _. authorised_arch_inv aag rv\<rbrace>,-"
+  sorry
+
+end
