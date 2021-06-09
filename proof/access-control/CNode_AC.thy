@@ -1364,7 +1364,7 @@ lemma set_simple_ko_vrefs[wp]:
   done
 
 lemma set_simple_ko_pas_refined[wp]:
-  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state and (\<lambda>s. P (state_vrefs s))\<rbrace>
+  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
     set_simple_ko f ptr (ep :: 'b) \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: pas_refined_def state_objs_to_policy_def)
   apply (rule hoare_pre)

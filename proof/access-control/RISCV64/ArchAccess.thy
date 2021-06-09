@@ -35,12 +35,13 @@ definition pte_ref2 where
        \<Rightarrow> Some (ptrFromPAddr (addr_from_ppn ppn), 0, {Control})
    | _ \<Rightarrow> None"
 
+term kernel_mappings
 definition vs_refs_aux :: "vm_level \<Rightarrow> arch_kernel_obj \<Rightarrow> (obj_ref \<times> obj_ref \<times> aa_type \<times> auth) set"
   where
   "vs_refs_aux level \<equiv> \<lambda>ko. case ko of
      ASIDPool pool \<Rightarrow> (\<lambda>(r,p). (p, ucast r, AASIDPool, Control)) ` graph_of pool
    | PageTable pt \<Rightarrow>
-       \<Union>(r,(p, sz, auth)) \<in> graph_of (pte_ref2 level o pt).
+       \<Union>(r,(p, sz, auth)) \<in> graph_of (pte_ref2 level o pt) - {(x,y). x \<in> kernel_mapping_slots \<and> level = max_pt_level}.
          (\<lambda>(p, a). (p, ucast r, APageTable, a)) ` (ptr_range p sz \<times> auth)
    | _ \<Rightarrow> {}"
 

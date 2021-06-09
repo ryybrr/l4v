@@ -137,6 +137,16 @@ lemma ptes_of_idx:
   apply (fastforce simp: pte_of_def)
   done
 
+lemma [simp]: "mask 12 >> 3 = (0x1FF :: obj_ref)"
+by (clarsimp simp: mask_def)
+
+
+lemma ucast_thingy:
+ "UCAST(64 \<rightarrow> 9) (ptr && mask ptTranslationBits)
+\<le> mask ptTranslationBits"
+  by (metis AND_twice and_mask_eq_iff_le_mask ucast_and_mask)
+
+
 lemma pt_lookup_from_level_is_subject:
   "\<lbrace>\<lambda>s. pas_refined aag s \<and> pspace_aligned s \<and> valid_vspace_objs s \<and> valid_asid_table s \<and>
         is_subject aag pt_ptr \<and> level \<le> max_pt_level \<and> vref \<in> user_region \<and>
@@ -199,13 +209,31 @@ apply (case_tac rv; clarsimp)
 apply (clarsimp simp: graph_of_def
 pte_ref2_def
 )
+apply (clarsimp simp: Bex_def)
+
+apply (case_tac "level = max_pt_level"; clarsimp)
+
+prefer 2
+
 apply (rule_tac x="table_index (pt_slot_offset level pt_ptr vref)" in exI)
 apply_trace clarsimp
 
 apply (intro conjI)
+
 apply (clarsimp simp: pptr_from_pte_def)
 apply (rule refl)
 apply (rule refl)
+
+apply (rule_tac x="table_index (pt_slot_offset max_pt_level pt_ptr vref)" in exI)
+apply_trace clarsimp
+
+apply (intro conjI)
+
+apply (rule table_index_max_level_slots)
+apply clarsimp
+  using pts_of_Some pts_of_Some_alignedD apply blast
+
+apply (clarsimp simp: pptr_from_pte_def)
 
 apply (rule_tac x=asid in exI)
 apply (rule vs_lookup_table_step)
@@ -236,7 +264,6 @@ apply simp
 apply simp
 
 apply (clarsimp simp: opt_map_def obj_at_def)
-
 done
 
 thm vs_lookup_table_def
@@ -545,9 +572,8 @@ definition authorised_page_inv :: "'a PAS \<Rightarrow> page_invocation \<Righta
 definition authorised_slots :: "'a PAS \<Rightarrow> pte \<times> obj_ref \<Rightarrow> bool" where
  "authorised_slots aag m \<equiv> case m of
     (pte, slot) \<Rightarrow>
-\<comment> \<open>
       (\<forall>level x. pte_ref2 level pte = Some x
-           \<longrightarrow> (\<forall>a \<in> snd (snd x). \<forall>p \<in> ptr_range (fst x) (fst (snd x)). aag_has_auth_to aag a p)) \<and> \<close>
+           \<longrightarrow> (\<forall>a \<in> snd (snd x). \<forall>p \<in> ptr_range (fst x) (fst (snd x)). aag_has_auth_to aag a p)) \<and>
       (is_subject aag (slot && ~~ mask pt_bits))"
 
 (* FIXME ryanb - pass level to authorised slots *)
@@ -678,10 +704,363 @@ lemma find_pd_for_asid_pd_owned[wp]:
 lemmas store_pte_pas_refined_simple =
   store_pte_pas_refined[where pte=InvalidPTE, simplified pte_ref_simps, simplified]
 
-crunch pas_refined[wp]: unmap_page "pas_refined aag"
-  (wp: crunch_wps store_pde_pas_refined_simple store_pte_pas_refined_simple simp: crunch_simps)
-
 *)
+
+find_theorems store_pte pas_refined
+
+
+lemma perform_pg_inv_get_addr_pas_refined [wp]:
+  "\<lbrace>pas_refined aag and invs\<rbrace>
+   perform_pg_inv_get_addr ptr
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+unfolding perform_pg_inv_get_addr_def
+apply wpsimp
+apply fastforce
+done
+
+
+thm perform_pg_inv_get_addr_def
+
+lemma perform_pg_inv_unmap_pas_refined:
+   "\<lbrace>pas_refined aag and invs and valid_page_inv (PageUnmap cap ct_slot)
+                     and K (authorised_page_inv aag (PageUnmap cap ct_slot))\<rbrace>
+    perform_pg_inv_unmap cap ct_slot
+    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+  unfolding perform_pg_inv_unmap_def unmap_page_def
+  apply (wps | clarsimp simp: conj_ac | wpsimp wp: store_pte_pas_refined set_cap_pas_refined_not_transferable get_cap_wp
+  hoare_vcg_all_lift hoare_vcg_imp_lift' store_pte_valid_arch_state_unreachable
+  simp: unmap_page_def)+
+
+  apply (strengthen invs_strgs invs_arch_state invs_vspace_objs invs_valid_global_vspace_mappings invs_valid_asid_table)
+  apply (clarsimp simp: conj_ac)
+
+
+  apply (rule conjI)
+   apply (fastforce simp: is_FrameCap_def authorised_page_inv_def
+                          valid_page_inv_def update_map_data_def cte_wp_at_caps_of_state)
+  apply clarsimp
+  apply (case_tac "cte_wp_at ((=) x) ct_slot s"; clarsimp)
+  apply (clarsimp simp: is_FrameCap_def authorised_page_inv_def valid_page_inv_def
+                        valid_arch_cap_def cte_wp_at_caps_of_state update_map_data_def
+                        aag_cap_auth_def cap_auth_conferred_def arch_cap_auth_conferred_def
+                        cap_links_asid_slot_def cap_links_irq_def is_transferable.simps)
+
+  apply (intro conjI; clarsimp)
+
+   apply (frule (1) pt_lookup_slot_vs_lookup_slotI0)
+   apply (drule vs_lookup_slot_level)
+
+   apply (case_tac "xc = asid_pool_level")
+    apply (fastforce dest: vs_lookup_slot_no_asid)
+
+
+   apply (frule vs_lookup_slot_table_base)
+      apply (fastforce simp: wellformed_mapdata_def)+
+   apply (frule vspace_for_asid_vs_lookup)
+
+   apply (prop_tac "vs_lookup_table max_pt_level xa xb s = Some (max_pt_level, x)")
+    apply (clarsimp simp: vs_lookup_table_def)
+
+   apply (frule reachable_page_table_not_global)
+      apply fastforce
+     apply (fastforce simp: wellformed_mapdata_def)
+    apply clarsimp
+   apply clarsimp
+
+
+   apply (rule conjI)
+    apply (case_tac ct_slot; clarsimp)
+    apply (clarsimp simp: wellformed_mapdata_def)
+    apply (frule vs_lookup_table_pt_at; clarsimp?)
+    apply (drule vs_lookup_table_valid_cap; clarsimp?)
+    apply (fastforce simp: valid_cap_def valid_arch_cap_def valid_arch_cap_ref_def obj_at_def
+                     dest: caps_of_state_valid split: cap.splits arch_cap.splits)
+   apply (clarsimp simp: wellformed_mapdata_def)
+  thm vs_lookup_table_vspace[rotated]
+   apply (drule (1) vs_lookup_table_vspace)
+     apply fastforce
+    apply fastforce
+   apply clarsimp
+
+   apply (clarsimp simp: vs_lookup_slot_def)
+   apply (frule user_region_slots)
+   apply (clarsimp simp: pt_slot_offset_def)
+
+   apply (metis (full_types, hide_lams) if_Some_None_eq_None invs_implies(7) pspace_aligned_pts_ofD pt_slot_offset_def pt_slot_offset_offset ptes_of_Some)
+
+  apply (erule_tac x="dev" in allE)
+  apply clarsimp
+  done
+
+
+crunches set_cap
+  for ptes_of[wp]: "\<lambda>s. P (ptes_of s)"
+and level_of_table[wp]: "\<lambda>s. P (level_of_table p s)"
+ (simp: level_of_table_def)
+
+
+
+
+
+lemma perform_pg_inv_map_pas_refined:
+  "\<lbrace>pas_refined aag and invs and valid_page_inv (PageMap cap ct_slot (pte,slot))
+                    and K (authorised_page_inv aag (PageMap cap ct_slot (pte,slot)))\<rbrace>
+   perform_pg_inv_map cap ct_slot pte slot
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+  unfolding perform_pg_inv_map_def
+  apply (rule hoare_gen_asm)
+  apply wpsimp
+    apply (clarsimp simp: pas_refined_def state_objs_to_policy_def)
+
+apply wps
+apply wpsimp
+apply (subst conj_commute) back
+apply (subst conj_commute)
+apply clarsimp
+apply (rule hoare_vcg_conj_lift)
+apply wpsimp
+apply (rule state_vrefs_store_NonPageTablePTE_wp')
+
+apply (rule_tac Q="\<lambda>_. invs and pas_refined aag and K (\<not> is_PageTablePTE pte)" in hoare_strengthen_post[rotated])
+apply (clarsimp simp: pas_refined_def)
+apply (rule conjI)
+apply clarsimp
+apply (intro exI, rule conjI, assumption)
+apply clarsimp
+apply (rule conjI)
+apply clarsimp
+apply (erule subsetD) back
+
+apply (erule state_asids_to_policy_aux.cases)
+      apply (fastforce dest: sata_asid)
+     apply (clarsimp simp: cte_wp_at_caps_of_state)
+apply (clarsimp simp only: split: if_splits)
+apply (clarsimp simp: vs_refs_aux_def)
+apply (erule sata_asid_lookup)
+apply assumption
+apply (fastforce dest: sata_asidpool)
+
+apply (clarsimp simp: auth_graph_map_def)
+apply (clarsimp simp: authorised_page_inv_def)
+
+apply (erule state_bits_to_policy.cases)
+apply (fastforce dest: sbta_caps simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_untyped simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_ts simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_bounds simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt_transferable simp: state_objs_to_policy_def)
+
+apply (clarsimp simp only: split: if_split_asm)
+prefer 2
+
+apply (erule subsetD)
+apply (simp only: state_objs_to_policy_def)
+apply (drule sbta_vref)
+apply fastforce
+
+apply (clarsimp simp: vs_refs_aux_def)
+apply (clarsimp simp: graph_of_def)
+
+apply (case_tac "level \<noteq> max_pt_level \<or> a \<notin> kernel_mapping_slots"; clarsimp simp: word_le_not_less)
+apply (subgoal_tac "(pasObjectAbs aag (table_base slot), ba, pasObjectAbs aag ac) \<in> pasPolicy aag")
+apply clarsimp
+apply (thin_tac "_ \<notin> _")
+
+
+
+apply (clarsimp split: if_split_asm)
+apply (case_tac pte; clarsimp)
+apply (clarsimp simp: pte_ref2_def)
+apply (clarsimp simp: authorised_slots_def)
+
+
+apply (case_tac "level = asid_pool_level")
+apply clarsimp
+apply (frule vs_lookup_slot_no_asid)
+apply (fastforce simp: ptes_of_Some pts_of_Some aobjs_of_Some obj_at_def)
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply (subst (asm) vs_lookup_slot_table_unfold)
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply (erule subsetD)
+apply (simp only: state_objs_to_policy_def)
+apply clarsimp
+apply (rule exI, rule conjI, rule refl)+
+apply (rule sbta_vref)
+apply (clarsimp simp: state_vrefs_def)
+apply (intro exI conjI)
+apply (rule refl)
+apply assumption
+apply (fastforce simp: aobjs_of_Some obj_at_def)
+apply fastforce
+apply (fastforce simp: vs_refs_aux_def graph_of_def)
+
+
+apply clarsimp
+
+
+
+apply (rule conjI)
+apply clarsimp
+apply (erule subsetD) back
+term state_asids_to_policy_aux
+apply (erule state_asids_to_policy_aux.cases)
+      apply (fastforce dest: sata_asid)
+     apply (clarsimp simp: cte_wp_at_caps_of_state)
+apply (clarsimp simp only: split: if_splits)
+apply (clarsimp simp: vs_refs_aux_def)
+apply (erule sata_asid_lookup)
+apply assumption
+apply (fastforce dest: sata_asidpool)
+
+apply (clarsimp simp: auth_graph_map_def)
+apply (clarsimp simp: authorised_page_inv_def)
+
+apply (erule state_bits_to_policy.cases)
+apply (fastforce dest: sbta_caps simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_untyped simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_ts simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_bounds simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt_transferable simp: state_objs_to_policy_def)
+
+apply (clarsimp simp only: split: if_split_asm)
+prefer 2
+
+apply (erule subsetD)
+apply (simp only: state_objs_to_policy_def)
+apply (drule sbta_vref)
+apply fastforce
+
+
+apply (case_tac "level = asid_pool_level")
+apply clarsimp
+apply (frule vs_lookup_table_no_asid)
+apply (fastforce simp: ptes_of_Some pts_of_Some aobjs_of_Some obj_at_def)
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply (frule level_of_table_vs_lookup_table)
+apply (fastforce simp: ptes_of_Some pts_of_Some aobjs_of_Some obj_at_def)
+apply fastforce
+apply fastforce
+apply fastforce
+apply (simp only: )
+apply (thin_tac "level_of_table _ _ = _")
+apply clarsimp
+
+apply (clarsimp simp: vs_refs_aux_def)
+apply (clarsimp simp: graph_of_def)
+
+
+apply (case_tac "level \<noteq> max_pt_level \<or> a \<notin> kernel_mapping_slots"; clarsimp simp: word_le_not_less)
+apply (subgoal_tac "(pasObjectAbs aag (table_base slot), ba, pasObjectAbs aag ac) \<in> pasPolicy aag")
+apply clarsimp
+apply (thin_tac "_ \<notin> _")
+
+
+apply (clarsimp split: if_split_asm)
+apply (case_tac pte; clarsimp)
+apply (clarsimp simp: pte_ref2_def)
+apply (clarsimp simp: authorised_slots_def)
+
+
+apply (erule subsetD)
+apply (simp only: state_objs_to_policy_def)
+apply clarsimp
+apply (rule exI, rule conjI, rule refl)+
+apply (rule sbta_vref)
+apply (clarsimp simp: state_vrefs_def)
+apply (intro exI conjI)
+apply (rule refl)
+apply assumption
+apply (fastforce simp: aobjs_of_Some obj_at_def)
+apply fastforce
+apply (fastforce simp: vs_refs_aux_def graph_of_def)
+
+apply (wpsimp wp: arch_update_cap_invs_map set_cap_pas_refined_not_transferable)
+apply (clarsimp simp: valid_page_inv_def authorised_page_inv_def)
+apply (clarsimp simp: cte_wp_at_caps_of_state is_frame_cap_def is_FrameCap_def)
+apply (intro conjI)
+
+apply (clarsimp simp: is_arch_update_def cap_master_cap_def)
+apply (case_tac cap; clarsimp)
+apply (clarsimp simp: same_ref_def parent_for_refs_def)
+  using vs_lookup_slot_unique_level apply blast
+
+apply (clarsimp simp: is_arch_update_def cap_master_cap_def)
+apply (case_tac cap; clarsimp)
+apply (clarsimp simp: is_arch_cap_def)
+apply (drule (1) caps_of_state_valid)
+apply (clarsimp simp: valid_arch_cap_def)
+apply (clarsimp simp: valid_cap_def cap_aligned_def)
+
+apply fastforce+
+done
+
+
+
+lemma perform_page_invocation_pas_refined [wp]:
+  "\<lbrace>pas_refined aag and invs and K (authorised_page_inv aag pgi) and valid_page_inv pgi\<rbrace>
+   perform_page_invocation pgi
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+apply (simp add: perform_page_invocation_def)
+apply (wpsimp wp: perform_pg_inv_map_pas_refined perform_pg_inv_unmap_pas_refined)
+apply auto
+done
+
+
+(*
+lemma "\<lbrace>pas_refined aag and invs and valid_page_inv (PageMap cap ct_slot (pte,slot))
+                        and K (authorised_page_inv aag (PageMap cap ct_slot (pte,slot)))\<rbrace>
+       perform_pg_inv_map cap ct_slot pte slot
+      \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+  unfolding perform_pg_inv_map_def
+  apply (rule hoare_gen_asm)
+  apply wpsimp
+    apply (clarsimp simp: pas_refined_def state_objs_to_policy_def)
+   apply (wps | wpsimp wp: state_vrefs_store_NonPageTablePTE_wp' arch_update_cap_invs_map  vs_lookup_slot_lift
+                     hoare_vcg_ex_lift hoare_vcg_all_lift hoare_vcg_imp_lift' set_cap_arch_obj_neg set_cap_state_vrefs)+
+
+apply (rule hoare_vcg_conj_lift)
+
+apply (rule_tac Q="\<lambda>_ s. ((\<exists>level. \<exists>\<rhd> (level, table_base slot) s) \<longrightarrow> R s) \<and> (\<not>(\<exists>level. \<exists>\<rhd> (level, table_base slot) s) \<longrightarrow> R s)"
+and R="\<lambda>_. R" for R in hoare_strengthen_post[rotated])
+apply fastforce
+
+apply (clarsimp cong: conj_cong)
+apply (rule hoare_vcg_conj_lift)
+apply (rule hoare_vcg_imp_lift')
+apply wpsimp
+apply (wpsimp wp: set_cap_state_vrefs hoare_vcg_all_lift hoare_vcg_imp_lift')+
+
+
+apply (rule_tac Q="\<lambda>_ s. ((\<exists>level. \<exists>\<rhd> (level, table_base slot) s) \<longrightarrow> R s) \<and> (\<not>(\<exists>level. \<exists>\<rhd> (level, table_base slot) s) \<longrightarrow> R s)"
+and R="\<lambda>_. R" for R in hoare_strengthen_post[rotated])
+apply fastforce
+
+apply (clarsimp cong: conj_cong)
+apply (rule hoare_vcg_conj_lift)
+apply (rule hoare_vcg_imp_lift')
+apply wpsimp
+apply (wpsimp wp: set_cap_state_vrefs hoare_vcg_all_lift hoare_vcg_imp_lift')+
+
+apply (clarsimp simp: conj_ac)
+
+
+apply (wps)
+apply (wpsimp wp: set_cap.vs_lookup set_cap_state_vrefs)
+thm state_vrefs_store_NonPageTablePTE_wp'
+*)
+
+
 
 lemma is_subject_trans:
   "\<lbrakk> is_subject aag x;  pas_refined aag s; (pasObjectAbs aag x, Control, pasObjectAbs aag y) \<in> pasPolicy aag \<rbrakk>
@@ -704,11 +1083,12 @@ done
 lemma pt_walk_is_subject:
   "\<lbrakk> pas_refined aag s; valid_vspace_objs s; valid_asid_table s; pspace_aligned s;
      pt_walk level bot_level pt_ptr vptr (ptes_of s) = Some (level', pt);
-     (\<exists>asid. vs_lookup_table level asid vptr s = Some (level, pt_ptr));
+     vs_lookup_table level asid vptr s = Some (level, pt_ptr);
      level \<le> max_pt_level; vptr \<in> user_region; is_subject aag pt_ptr \<rbrakk>
      \<Longrightarrow> is_subject aag pt"
-apply (induct level arbitrary: pt_ptr )
+apply (induct level arbitrary: pt_ptr)
 apply (subst (asm) pt_walk.simps, simp)
+
 
 apply (subst (asm) pt_walk.simps) back
 apply (clarsimp simp: obind_def split: if_splits option.splits)
@@ -721,7 +1101,6 @@ apply (drule meta_mp)
 prefer 2
 apply simp
 prefer 2
-apply (rule_tac x=asid in exI)
 
 apply (rule vs_lookup_table_extend)
 apply assumption
@@ -773,6 +1152,11 @@ apply clarsimp
 apply (clarsimp simp: ptes_of_def obind_def is_PageTablePTE_def split: option.splits)
 
 apply (clarsimp simp: vs_refs_aux_def)
+
+apply (case_tac "level = max_pt_level"; clarsimp)
+
+prefer 2
+
 apply (prop_tac "(table_index (pt_slot_offset level pt_ptr vptr), ptrFromPAddr (addr_from_ppn x31), 0, {Control}) \<in>graph_of (pte_ref2 level \<circ> pta)")
 apply (clarsimp simp: graph_of_def pte_ref2_def)
 
@@ -780,9 +1164,27 @@ apply (rule bexI)
 prefer 2
 apply assumption
 apply clarsimp
+apply (rule conjI)
 apply (clarsimp simp: pptr_from_pte_def)
-apply auto
+apply fastforce
+
+
+apply (prop_tac "(table_index (pt_slot_offset max_pt_level pt_ptr vptr), ptrFromPAddr (addr_from_ppn x31), 0, {Control}) \<in>graph_of (pte_ref2 max_pt_level \<circ> pta)")
+apply (clarsimp simp: graph_of_def pte_ref2_def)
+
+apply (rule bexI)
+prefer 2
+apply clarsimp
+apply (rule conjI)
+apply assumption
+apply clarsimp
+apply (drule table_index_max_level_slots)
+prefer 2
+apply fastforce
+  using aobjs_of_Some pts_of_Some pts_of_Some_alignedD apply blast
+apply (clarsimp simp: pptr_from_pte_def)
 done
+
 
 
 lemma pt_lookup_slot_from_level_is_subject:
@@ -974,6 +1376,9 @@ qed
 crunch cdt[wp]: unmap_page "\<lambda>s. P (cdt s)"
   (simp: crunch_simps wp: crunch_wps)
 
+*)
+
+(*
 lemma perform_page_invocation_pas_refined [wp]:
   "\<lbrace>pas_refined aag and K (authorised_page_inv aag pgi) and valid_page_inv pgi\<rbrace>
    perform_page_invocation pgi
@@ -1054,16 +1459,7 @@ delete_objects_valid_vspace_objs delete_objects_valid_arch_state
                         pageBits_def word_bits_def)
   apply (subst is_aligned_neg_mask_eq[THEN sym], assumption)
   apply (simp add: and_mask_eq_iff_shiftr_0 mask_zero)
-apply (intro conjI)
 apply (clarsimp simp: word_size_bits_def)
-apply clarsimp
-
-apply (clarsimp simp: valid_aci_def)
-apply (rule_tac x=aa in exI)
-apply (rule_tac x=ba in exI)
-
-apply (erule cte_wp_at_weakenE)
-apply (clarsimp simp: descendants_range_def pageBits_def)
   done
 
 (*
@@ -1079,27 +1475,217 @@ lemma pas_refined_set_asid_strg:
                  intro!: pas_refined_refl[simplified pas_refined_def state_objs_to_policy_def])
   done
 
+*)
+
+thm pas_refined_def
+
+
+lemma state_vrefs_helper_thing:
+"\<lbrakk>ako_at (ASIDPool Map.empty) frame s;
+          asid_table s (asid_high_bits_of base) = None\<rbrakk>
+         \<Longrightarrow> (state_vrefs
+                  (s\<lparr>arch_state := arch_state s
+                       \<lparr>riscv_asid_table :=
+                          \<lambda>a. if a = asid_high_bits_of base then Some frame
+                               else asid_table s a\<rparr>\<rparr>)) = state_vrefs s"
+apply (rule all_ext)
+apply clarsimp
+apply safe
+prefer 2
+
+apply (subst (asm) state_vrefs_def)
+apply clarsimp
+
+apply (clarsimp simp: state_vrefs_def)
+
+apply (rule exI)
+apply (rule conjI)
+apply (rule_tac x=lvl in exI)
+
+apply (rule_tac x=ao in exI)
+apply (rule conjI)
+apply (rule refl)
+apply (rule_tac x=lvl in exI)
+apply (rule_tac x=asid in exI)
+apply (drule vs_lookup_level)
+apply (rule_tac x=vref in exI)
+apply clarsimp
+prefer 2
+apply clarsimp
+
+apply (clarsimp simp: vs_lookup_table_def obind_def split: option.splits if_splits)
+apply (clarsimp simp: pool_for_asid_def)
+apply (clarsimp simp: pool_for_asid_def)
+apply (fastforce simp: vspace_for_pool_def obind_def split: option.splits)
+
+apply (subst (asm) state_vrefs_def)
+apply clarsimp
+
+apply (case_tac "asid_high_bits_of asid = asid_high_bits_of base")
+prefer 2
+
+apply (clarsimp simp: vs_lookup_table_def)
+apply (clarsimp simp: pool_for_asid_def)
+
+apply (clarsimp split: if_splits)
+apply (clarsimp simp: state_vrefs_def)
+apply (fastforce simp: vs_lookup_table_def obind_def pool_for_asid_def
+                split: option.splits)
+apply (clarsimp simp: state_vrefs_def)
+
+apply (intro exI conjI)
+apply (rule refl)
+apply (clarsimp simp: vs_lookup_table_def obind_def pool_for_asid_def
+                split: option.splits)
+apply (rule conjI)
+apply fastforce
+apply clarsimp
+apply (rule conjI)
+prefer 2
+apply clarsimp
+apply (rule conjI)
+prefer 2
+apply clarsimp
+apply assumption
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply (clarsimp simp: vs_lookup_table_def)
+
+apply (case_tac "bot = asid_pool_level")
+
+prefer 2
+
+apply (clarsimp simp: vs_lookup_table_def)
+apply (clarsimp simp: pool_for_asid_def)
+
+apply (clarsimp simp: vspace_for_pool_def)
+apply (clarsimp simp: asid_pools_of_ko_at obj_at_def)
+
+
+apply clarsimp
+
+apply (clarsimp simp: pool_for_asid_def)
+apply (clarsimp simp: obj_at_def vs_refs_aux_def aobjs_of_Some)
+apply (clarsimp simp: authorised_asid_control_inv_def graph_of_def)
+done
+
+
+lemma pas_refined_asid_control_helper:
+ "authorised_asid_control_inv aag (MakePool frame slot parent base) \<Longrightarrow>
+\<lbrace>\<lambda>s. pas_refined aag s \<and>  ko_at (ArchObj (ASIDPool Map.empty)) frame s
+ \<and> asid_table s (asid_high_bits_of base) = None
+\<rbrace> do
+                                          asid_table <- gets (riscv_asid_table \<circ> arch_state);
+                                          asid_table' <- return (asid_table(asid_high_bits_of base \<mapsto> frame));
+                                          modify (\<lambda>s. s\<lparr>arch_state := arch_state s\<lparr>riscv_asid_table := asid_table'\<rparr>\<rparr>)
+od \<lbrace>\<lambda>_ s. pas_refined aag s\<rbrace>"
+unfolding pas_refined_def
+apply wpsimp
+
+apply (rule conjI)
+apply (clarsimp simp: state_objs_to_policy_def)
+apply (clarsimp simp: auth_graph_map_def)
+apply (erule state_bits_to_policy.cases)
+
+apply (fastforce dest: sbta_caps simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_untyped simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_ts simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_bounds simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt_transferable simp: state_objs_to_policy_def)
+apply (subst (asm) state_vrefs_helper_thing)
+apply clarsimp
+apply clarsimp
+apply (erule subsetD)
+apply (simp only:)
+apply (drule sbta_vref)
+apply fastforce
+
+apply clarsimp
+apply (erule state_asids_to_policy_aux.cases)
+thm sata_asid
+thm sata_asid_lookup
+thm sata_asidpool
+apply (fastforce dest: sata_asid)
+prefer 2
+apply (clarsimp split: if_splits)
+apply (clarsimp simp: authorised_asid_control_inv_def)
+apply (drule_tac x=frame in bspec)
+apply clarsimp
+  using is_aligned_no_overflow apply blast
+  apply (simp add: aag_wellformed_refl)
+apply (fastforce dest: sata_asidpool)
+
+apply (subst (asm) state_vrefs_helper_thing)
+apply clarsimp
+apply clarsimp
+
+
+apply (case_tac "asid_high_bits_of asid = asid_high_bits_of base")
+prefer 2
+
+
+
+apply (drule sata_asid_lookup[rotated])
+apply clarsimp
+apply assumption
+apply fastforce
+apply (clarsimp simp: state_vrefs_def aobjs_of_Some obj_at_def vs_refs_aux_def graph_of_def)
+done
+
+(* FIXME ryanb: move *)
+lemma retype_region_invs_extras_vspace_objs:
+  "\<lbrace>invs and pspace_no_overlap_range_cover ptr sz and caps_no_overlap ptr sz
+     and caps_overlap_reserved {ptr..ptr + of_nat n * 2 ^ obj_bits_api ty us - 1}
+     and region_in_kernel_window {ptr..(ptr && ~~ mask sz) + 2 ^ sz - 1}
+     and (\<lambda>s. \<exists>slot. cte_wp_at (\<lambda>c.  {ptr..(ptr && ~~ mask sz) + (2 ^ sz - 1)} \<subseteq> cap_range c \<and> cap_is_device c = dev) slot s)
+     and K (ty = CapTableObject \<longrightarrow> 0 < us)
+     and K (range_cover ptr sz (obj_bits_api ty us) n)\<rbrace>
+      retype_region ptr n us ty dev \<lbrace>\<lambda>rv. valid_vspace_objs\<rbrace>"
+  apply (wp hoare_strengthen_post [OF retype_region_post_retype_invs],
+    auto simp: post_retype_invs_def split: if_split_asm)+
+  done
+
+
 lemma perform_asid_control_invocation_pas_refined [wp]:
   "\<lbrace>pas_refined aag and pas_cur_domain aag and invs and valid_aci aci and ct_active
                     and K (authorised_asid_control_inv aag aci)\<rbrace>
    perform_asid_control_invocation aci
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+apply (rule hoare_gen_asm)
   apply (simp add: perform_asid_control_invocation_def)
-  apply (rule hoare_pre)
+apply (wpc)
+apply (rule hoare_seq_ext)
+apply (simp only: K_bind_def)
+apply (rule hoare_seq_ext)
+apply (rule hoare_seq_ext)
+apply (rule hoare_seq_ext)
+apply (rule hoare_seq_ext)
+apply (rule hoare_seq_ext)
+apply (rule pas_refined_asid_control_helper)
+apply assumption
    apply (wp cap_insert_pas_refined' static_imp_wp
-          | strengthen pas_refined_set_asid_strg
+          | strengthen
           | wpc
           | simp add: delete_objects_def2 fun_upd_def[symmetric])+
       apply (wp retype_region_pas_refined'[where sz=pageBits]
                 hoare_vcg_ex_lift hoare_vcg_all_lift static_imp_wp hoare_wp_combs hoare_drop_imp
                 retype_region_invs_extras(4)[where sz = pageBits]
+                retype_region_invs_extras(6)[where sz = pageBits]
+                retype_region_invs_extras(1)[where sz = pageBits]
+retype_region_invs_extras_vspace_objs[where sz = pageBits]
              | simp add: do_machine_op_def split_def cte_wp_at_neg2)+
+
       apply (wp retype_region_cte_at_other'[where sz=pageBits]
                 max_index_upd_invs_simple max_index_upd_caps_overlap_reserved
                 hoare_vcg_ex_lift set_cap_cte_wp_at hoare_vcg_disj_lift set_free_index_valid_pspace
                 set_cap_descendants_range_in set_cap_no_overlap get_cap_wp set_cap_caps_no_overlap
                 hoare_vcg_all_lift static_imp_wp retype_region_invs_extras
-                set_cap_pas_refined_not_transferable
+                set_cap_pas_refined_not_transferable arch_update_cap_valid_mdb
              | simp add: do_machine_op_def split_def cte_wp_at_neg2 region_in_kernel_window_def)+
    apply (rename_tac frame slot parent base cap)
    apply (case_tac slot, rename_tac slot_ptr slot_idx)
@@ -1110,7 +1696,7 @@ lemma perform_asid_control_invocation_pas_refined [wp]:
              pas_refined aag s \<and>
              pas_cur_domain aag s \<and>
              pspace_no_overlap_range_cover frame pageBits s \<and>
-             invs s \<and>
+             invs s \<and> asid_table s (asid_high_bits_of base) = None \<and>
              descendants_range_in
                {frame..(frame && ~~ mask pageBits) + 2 ^ pageBits - 1} parent s \<and>
              range_cover frame pageBits
@@ -1134,15 +1720,30 @@ lemma perform_asid_control_invocation_pas_refined [wp]:
    apply (clarsimp simp: cte_wp_at_def aag_cap_auth_def ptr_range_def pas_refined_refl
                          cap_links_asid_slot_def cap_links_irq_def
                          obj_bits_api_def default_arch_object_def retype_addrs_def)
+apply (clarsimp simp: conj_ac)
+   apply (rule conjI, fastforce)
+   apply (rule conjI, fastforce)
+   apply (rule conjI, fastforce)
+   apply (rule conjI, fastforce)
    apply (rule conjI, force intro: descendants_range_caps_no_overlapI
                              simp: cte_wp_at_def)
    apply (rule conjI)
+apply (clarsimp simp: max_free_index_def)
+apply (prop_tac "valid_cap (UntypedCap False frame pageBits idx) s")
+apply (clarsimp simp: get_cap_caps_of_state)
+  apply (simp add: Untyped_AI.caps_of_state_valid)
+   apply (rule conjI)
+apply (clarsimp simp: free_index_of_def max_free_index_def valid_cap_def)
+   apply (rule conjI)
     apply (cut_tac s=s and ptr="(parent_ptr, parent_idx)" in cap_refs_in_kernel_windowD)
       apply ((fastforce simp add: caps_of_state_def cap_range_def)+)[3]
-   apply (rule conjI, force simp: field_simps)
-   apply (rule conjI, fastforce)
-   apply (fastforce dest: caps_of_state_valid
-                    simp: caps_of_state_def free_index_of_def max_free_index_def valid_cap_def)
+apply (clarsimp simp: valid_cap_def)
+apply (prop_tac "frame \<le> frame + (2 ^ pageBits - 1)")
+  using is_aligned_no_overflow' apply blast
+apply (prop_tac "frame + (2 ^ pageBits - 1) \<le> frame + 2 ^ pageBits - 1")
+  apply (simp add: x_power_minus_1)
+apply fastforce
+
   apply (clarsimp simp: valid_aci_def authorised_asid_control_inv_def)
   apply (rename_tac frame slot_ptr slot_idx parent_ptr parent_idx base)
   apply (subgoal_tac "is_aligned frame pageBits")
@@ -1172,7 +1773,6 @@ lemma perform_asid_control_invocation_pas_refined [wp]:
   apply (fastforce dest: cte_wp_at_valid_objs_valid_cap simp: valid_cap_def cap_aligned_def)
   done
 
-*)
 
 definition authorised_asid_pool_inv :: "'a PAS \<Rightarrow> asid_pool_invocation \<Rightarrow> bool" where
  "authorised_asid_pool_inv aag api \<equiv>
@@ -1246,7 +1846,7 @@ apply clarsimp
    apply wpsimp+
   done
 
-thm valid_arch_inv_def
+
 lemma perform_asid_pool_invocation_respects:
   "\<lbrace>integrity aag X st and pas_refined aag and invs and valid_apinv api and K (authorised_asid_pool_inv aag api)\<rbrace>
    perform_asid_pool_invocation api
@@ -1280,6 +1880,174 @@ apply (clarsimp simp: valid_cap_def)
 apply fastforce
 done
 
+
+
+
+
+thm valid_arch_inv_def
+thm copy_global_mappings_invs
+
+lemma store_pte_state_vrefs_unreachable:
+  "\<lbrace>(\<lambda>s. P (state_vrefs s)) and pspace_aligned and valid_vspace_objs and valid_asid_table and (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, table_base p) s) \<rbrace>
+  store_pte p pte \<lbrace>\<lambda>_. (\<lambda>s. P (state_vrefs s))\<rbrace>"
+ supply fun_upd_apply[simp del]
+  apply (wpsimp simp: store_pte_def set_pt_def wp: set_object_wp)
+apply (erule rsubst[where P=P])
+apply (rule all_ext)
+apply safe
+prefer 2
+
+apply (clarsimp simp: state_vrefs_def)
+apply (subst (asm) vs_lookup_table_unreachable_upd_idem)
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply (prop_tac "x \<noteq> table_base p")
+  using vs_lookup_level apply blast
+apply (clarsimp simp: fun_upd_def)
+apply (clarsimp simp: aobjs_of_Some)
+apply fastforce
+
+apply (clarsimp simp: state_vrefs_def)
+apply (rule exI)
+apply (rule conjI)
+apply (rule exI)
+apply (rule exI)
+apply (rule conjI, rule refl)
+apply (rule exI)
+apply (rule exI)
+apply (rule_tac x=vref in exI)
+apply (rule conjI)
+apply (subst vs_lookup_table_unreachable_upd_idem)
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+apply assumption
+apply (prop_tac "x \<noteq> table_base p")
+  using vs_lookup_level apply blast
+apply (fastforce simp: fun_upd_def aobjs_of_Some obj_at_def)
+apply clarsimp
+done
+
+(* FIXME ryanb: do something with original? *)
+lemma not_in_global_refs_vs_lookup:
+  "(\<exists>\<rhd> (level,p)) s \<and> valid_vs_lookup s \<and> valid_global_refs s
+            \<and> valid_arch_state s \<and> valid_global_objs s
+            \<and> pt_at p s
+        \<Longrightarrow> p \<notin> global_refs s"
+  apply clarsimp
+  apply (cases "level = asid_pool_level"; simp)
+   apply (simp add: vs_lookup_table_def in_omonad)
+   apply (drule (1) pool_for_asid_ap_at)
+   apply (clarsimp simp: obj_at_def)
+  apply (drule (1) vs_lookup_table_target)
+  apply (drule valid_vs_lookupD; clarsimp simp: vref_for_level_user_region)
+  apply (drule(1) valid_global_refsD2)
+  apply (simp add: cap_range_def)
+  done
+
+(* FIXME ryanb: original has unnecessary condition *)
+lemma store_pte_valid_vs_lookup_unreachable:
+  "\<lbrace> valid_vs_lookup and pspace_aligned and valid_vspace_objs and valid_asid_table and
+     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, table_base p) s)  \<rbrace>
+   store_pte p pte
+   \<lbrace> \<lambda>_. valid_vs_lookup \<rbrace>"
+  unfolding valid_vs_lookup_def
+  apply (wpsimp wp: hoare_vcg_all_lift hoare_vcg_imp_lift' store_pte_vs_lookup_target_unreachable)
+  apply (erule disjE; clarsimp)
+  done
+
+lemma copy_global_mappings_state_vrefs:
+  "\<lbrace> (\<lambda>s. P (state_vrefs s)) and invs and K (is_aligned pt_ptr pt_bits) and
+     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, pt_ptr) s)  \<rbrace>
+   copy_global_mappings pt_ptr
+   \<lbrace>\<lambda>_ s. P (state_vrefs s)\<rbrace>"
+  unfolding copy_global_mappings_def
+apply clarsimp
+  apply wp
+      apply (rule hoare_strengthen_post)
+       apply (rule_tac P="(\<lambda>s. P (state_vrefs s)) and pspace_aligned and valid_vspace_objs and valid_asid_table and
+unique_table_refs and
+            valid_vs_lookup and valid_objs and
+ (\<lambda>s. is_aligned pt_ptr pt_bits \<and> is_aligned global_pt pt_bits \<and>
+
+ (\<forall>level. \<not> \<exists>\<rhd> (level, table_base (pt_ptr)) s) \<and>
+ (\<forall>level. \<not> \<exists>\<rhd> (level, table_base (global_pt)) s))" in mapM_x_wp')
+
+apply (wpsimp wp: store_pte_state_vrefs_unreachable store_pte_valid_vspace_objs
+hoare_vcg_all_lift hoare_vcg_imp_lift'
+store_pte_vs_lookup_table_unreachable
+store_pte_valid_vs_lookup_unreachable
+)
+
+apply (prop_tac "table_base (pt_ptr + (x << pte_bits)) = pt_ptr")
+apply (frule_tac i=x in is_aligned_pte_offset)
+      apply (metis mask_2pm1 table_base_plus)
+
+apply (prop_tac "table_base (global_pt + (x << pte_bits)) = global_pt")
+apply (frule_tac i=x in is_aligned_pte_offset)
+      apply (metis mask_2pm1 table_base_plus)
+
+apply (clarsimp simp: valid_objs_caps)
+  using ptes_of_wellformed_pte apply blast
+apply clarsimp
+
+apply wpsimp
+apply clarsimp
+apply (intro conjI; fastforce?)
+  apply (simp add: invs_valid_global_vspace_mappings)
+  apply (simp add: invs_valid_global_vspace_mappings)
+apply (clarsimp)
+apply (prop_tac "global_pt s \<notin> global_refs s")
+apply (rule_tac level=level in not_in_global_refs_vs_lookup)
+  using invs_valid_global_arch_objs valid_global_arch_objs_pt_at apply fastforce
+  using invs_valid_global_arch_objs riscv_global_pt_in_global_refs apply blast
+done
+
+(*
+lemma copy_global_mappings_pas_refined:
+  "is_aligned pd pd_bits
+   \<Longrightarrow> \<lbrace>pas_refined aag and valid_kernel_mappings and valid_arch_state
+                        and valid_global_objs and valid_global_refs and pspace_aligned\<rbrace>
+       copy_global_mappings pd
+       \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+*)
+
+crunches copy_global_mappings
+  for tcb_domain_map_wellformed[wp]: "\<lambda>s. P (tcb_domain_map_wellformed aag s)"
+  and asid_table[wp]: "\<lambda>s. P (asid_table s)"
+  and cdt[wp]: "\<lambda>s. P (cdt s)"
+  and thread_states[wp]: "\<lambda>s. P (thread_states s)"
+  and thread_bound_ntfns[wp]: "\<lambda>s. P (thread_bound_ntfns s)"
+  (wp: crunch_wps)
+
+lemma copy_global_mappings_pas_refined:
+  "\<lbrace> pas_refined aag and invs and K (is_aligned pt_ptr pt_bits) and
+     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, pt_ptr) s)
+ \<rbrace>
+   copy_global_mappings pt_ptr
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+apply (clarsimp simp: pas_refined_def state_objs_to_policy_def)
+apply (rule hoare_pre)
+apply_trace (rule hoare_vcg_conj_lift, solves wpsimp)+
+apply (rule hoare_vcg_conj_lift)
+prefer 2
+apply (rule hoare_vcg_conj_lift)
+prefer 2
+apply wpsimp
+apply wps
+apply (rule copy_global_mappings_state_vrefs)
+apply wps
+apply (rule copy_global_mappings_state_vrefs)
+apply clarsimp
+done
+
+
 (*
 
 lemma asid_pool_into_aag:
@@ -1303,43 +2071,618 @@ lemma asid_pool_uniqueness:
    apply (clarsimp simp: vs_cap_ref_def table_cap_ref_def up_ucast_inj_eq
                   split: vmpage_size.splits option.splits cap.splits arch_cap.splits)+
   done
+*)
+
+thm state_vrefs_def
+
+lemma set_asid_pool_pas_refined[wp]:
+  "\<lbrace>pas_refined aag and
+    (\<lambda>s. \<forall>(x, y) \<in> graph_of pool.
+           auth_graph_map (pasObjectAbs aag) {(p, Control, y)} \<subseteq> pasPolicy aag \<and>
+           (\<forall>asid. asid_table s (asid_high_bits_of asid) = Some p \<and>
+                   asid && mask asid_low_bits = ucast x
+                   \<longrightarrow> (pasASIDAbs aag asid, Control, pasObjectAbs aag y) \<in> pasPolicy aag))\<rbrace>
+         set_asid_pool p pool \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
+  apply (simp add: auth_graph_map_def2 image_UN split_def)
+  apply (simp add: pas_refined_def state_objs_to_policy_def)
+  apply (rule hoare_pre)
+   apply (wp tcb_domain_map_wellformed_lift | wps)+
+oops
+(*
+  apply clarsimp
+  apply (rule conjI)
+   apply (clarsimp dest!: auth_graph_map_memD)
+   apply (erule state_bits_to_policy.cases,
+          auto intro: state_bits_to_policy.intros auth_graph_map_memI
+               split: if_split_asm)[1]
+  apply (auto intro: state_asids_to_policy_aux.intros
+               simp: subsetD[OF _ state_asids_to_policy_aux.intros(2)]
+              elim!: state_asids_to_policy_aux.cases
+              split: if_split_asm)
+  apply fastforce+
+  done
+oops
+*)
+
+(*
+     \<Union>{vs_refs_aux lvl ao | lvl ao bot asid vref.
+
+if we can pt walk to x from pt base
+then THE level and ao.
+else state_vrefs s x
+
+vs_lookup_table bot asid vref s = Some (lvl, p) \<and>
+
+ aobjs_of s p = Some ao \<and>
+
+vref \<in> user_region}"
+
+if \<exists>level vref. pt_walk max_pt_level level pt_base vref (ptes_of s) = Some (level, x) \<and> vref \<in> user_region
+then vs_refs_aux (level_of_table) (the (aobjs_of s x))
+else state_vrefs s x
+*)
+thm vs_lookup_table_def
+thm level_of_table_def
+thm vs_refs_aux_def
+
+(* ryanb - useful theorem *)
+thm valid_table_caps_pdD
+
+lemma "valid_apinv (Assign asid pool_ptr ct_slot) s = X"
+apply (clarsimp simp: valid_apinv_def)
+oops
+
+
+definition level_of_walk :: "obj_ref \<Rightarrow> obj_ref \<Rightarrow> vspace_ref \<Rightarrow> 'z::state_ext state \<Rightarrow> vm_level"
+  where
+  "level_of_walk p p' vref s \<equiv>
+     GREATEST level. pt_walk max_pt_level level p vref (ptes_of s) = Some (level, p')"
+
+lemma
+  "kernel_mappings_only pt s \<Longrightarrow> vs_refs_aux level (PageTable pt) = {}"
+
+apply (clarsimp simp: vs_refs_aux_def)
+oops
+
+
+thm has_kernel_mappingsD
+thm set_asid_pool_def
+
+
+lemma store_asid_pool_entry_state_vrefs:
+  "\<lbrace>\<lambda>s. P (\<lambda>x. if x = pool_ptr
+               then vs_refs_aux asid_pool_level (ASIDPool (\<lambda>a. if a = asid_low_bits_of asid
+                                                               then Some pt_base
+                                                               else (the (asid_pools_of s pool_ptr)) a))
+               else if x = pt_base
+               then vs_refs_aux max_pt_level (the (aobjs_of s x))
+               else state_vrefs s x) \<and>
+        pool_for_asid asid s = Some pool_ptr \<and>
+        (\<forall>pool. ako_at (ASIDPool pool) pool_ptr s \<longrightarrow> pool (asid_low_bits_of asid) = None) \<and>
+        (\<forall>level. \<not>\<exists>\<rhd> (level, pt_base) s) \<and>
+        (\<exists>pt. pts_of s pt_base = Some pt \<and> kernel_mappings_only pt s) \<and>
+        pspace_aligned s \<and> valid_vspace_objs s \<and> valid_asid_table s\<rbrace>
+\<comment> \<open>
+         pt_cap <- get_cap ct_slot;
+         pt_base <- return $ acap_obj (the_arch_cap pt_cap);
+\<close>
+   store_asid_pool_entry pool_ptr asid (Some pt_base)
+   \<lbrace>\<lambda>_ s. P (state_vrefs s)\<rbrace>"
+apply clarsimp
+unfolding store_asid_pool_entry_def set_asid_pool_def
+apply (wpsimp wp: set_object_wp get_cap_wp)
+apply (erule rsubst[where P=P])
+apply (rule all_ext)
+apply (clarsimp split del: if_split)
+
+
+apply (prop_tac "is_aligned pt_base pt_bits")
+apply (fastforce elim: pspace_aligned_pts_ofD dest: invs_psp_aligned)
+
+apply safe
+
+apply (clarsimp split: if_splits)
+
+(* x = pool_ptr *)
+apply (clarsimp simp: state_vrefs_def)
+apply (rule exI)
+apply (rule conjI)
+prefer 2
+apply (assumption)
+apply (rule exI)
+apply (rule exI)
+apply (rule conjI, rule refl)
+apply (rule_tac x=asid_pool_level in exI)
+apply (rule exI)+
+apply (rule conjI)
+apply (clarsimp simp: fun_upd_def)
+thm asid_pool_map.vs_lookup_table[simplified fun_upd_def]
+apply (subst asid_pool_map.vs_lookup_table[simplified fun_upd_def])
+thm asid_pool_map_def
+apply (fastforce simp: asid_pool_map_def asid_pools_of_ko_at obj_at_def valid_apinv_def asid_low_bits_of_def
+pts_of_Some aobjs_of_Some)
+apply fastforce
+apply clarsimp
+apply (fastforce simp: vs_lookup_table_def obind_def split: option.splits)
+apply clarsimp
+apply (clarsimp simp: ako_asid_pools_of)
+(* x = acap_obj acap *)
+apply (clarsimp simp: obj_at_def)
+
+apply (clarsimp simp: state_vrefs_def)
+apply (rule exI)
+apply (rule conjI)
+prefer 2
+apply (assumption)
+apply (rule exI)
+apply (rule exI)
+apply (rule conjI, rule refl)
+apply (rule_tac x=max_pt_level in exI)
+apply (rule_tac x=asid in exI)
+apply (rule_tac x=0 in exI)
+apply (rule conjI)
+apply (clarsimp simp: fun_upd_def)
+thm asid_pool_map.vs_lookup_table[simplified fun_upd_def]
+thm asid_pool_map.vs_lookup_table
+apply (subst asid_pool_map.vs_lookup_table[simplified fun_upd_def])
+apply (fastforce simp: asid_pool_map_def asid_pools_of_ko_at obj_at_def valid_apinv_def asid_low_bits_of_def
+pts_of_Some aobjs_of_Some)
+apply clarsimp
+apply clarsimp
+apply clarsimp
+apply (clarsimp simp: pts_of_Some)
+
+(* x is none of the above *)
+
+apply (clarsimp simp: obj_at_def)
+
+apply (clarsimp simp: state_vrefs_def)
+apply (rule exI)
+apply (rule conjI)
+prefer 2
+apply (assumption)
+apply (rule exI)
+apply (rule exI)
+apply (rule conjI, rule refl)
+apply (frule vs_lookup_level)
+apply (rule_tac x=lvl in exI)
+apply (rule_tac x=asida in exI)
+apply (rule_tac x=vref in exI)
+apply (rule conjI)
+apply (clarsimp simp: fun_upd_def)
+thm asid_pool_map.vs_lookup_table[simplified fun_upd_def]
+thm asid_pool_map.vs_lookup_table
+apply (subst asid_pool_map.vs_lookup_table[simplified fun_upd_def])
+apply (fastforce simp: asid_pool_map_def asid_pools_of_ko_at obj_at_def valid_apinv_def asid_low_bits_of_def
+pts_of_Some aobjs_of_Some)
+apply clarsimp
+apply clarsimp
+apply (clarsimp simp: vs_lookup_table_def obind_def vspace_for_pool_def asid_pools_of_ko_at
+obj_at_def
+split: if_splits option.splits)
+apply clarsimp
+
+
+(* second direction *)
+
+supply if_split[split del]
+apply (subst (asm) state_vrefs_def)
+apply clarsimp
+apply (clarsimp simp: fun_upd_def)
+apply (subst (asm) asid_pool_map.vs_lookup_table[simplified fun_upd_def])
+apply (fastforce simp: asid_pool_map_def asid_pools_of_ko_at obj_at_def valid_apinv_def asid_low_bits_of_def
+pts_of_Some aobjs_of_Some)
+apply clarsimp
+apply (case_tac "x = pool_ptr")
+apply clarsimp
+apply (prop_tac "asid_pools_of s pool_ptr = Some pool")
+apply (clarsimp simp:  asid_pools_of_ko_at obj_at_def)
+apply (clarsimp simp: vs_refs_aux_def)
+
+apply clarsimp
+
+apply (case_tac "asida = asid \<and> bot \<le> max_pt_level")
+apply clarsimp
+
+apply clarsimp
+
+apply (case_tac "x = pt_base")
+apply clarsimp
+apply (fastforce dest: vs_lookup_level)
+apply clarsimp
+apply (fastforce simp: state_vrefs_def)
+done
+
+crunches store_asid_pool_entry
+  for irq_map_wellformed[wp]: "\<lambda>s. P (irq_map_wellformed aag s)"
+  and tcb_domain_map_wellformed[wp]: "\<lambda>s. P (tcb_domain_map_wellformed aag s)"
+  and state_irqs_to_policy[wp]: "\<lambda>s. P (state_irqs_to_policy aag s)"
+  and caps_of_state[wp]: "\<lambda>s. P (caps_of_state s)"
+  and asid_table[wp]: "\<lambda>s. P (asid_table s)"
+  and cdt[wp]: "\<lambda>s. P (cdt s)"
+  and thread_states[wp]: "\<lambda>s. P (thread_states s)"
+  and thread_bound_ntfns[wp]: "\<lambda>s. P (thread_bound_ntfns s)"
+
+
+thm authorised_asid_pool_inv_def
+lemma store_asid_pool_entry_pas_refined:
+  "\<lbrace>\<lambda>s. pas_refined aag s \<and>
+        pool_for_asid asid s = Some pool_ptr \<and>
+        (\<forall>level. \<not>\<exists>\<rhd> (level, pt_base) s) \<and>
+        (\<forall>pool. ako_at (ASIDPool pool) pool_ptr s \<longrightarrow> pool (asid_low_bits_of asid) = None) \<and>
+        (\<exists>pt. pts_of s pt_base = Some pt \<and> kernel_mappings_only pt s) \<and>
+        pspace_aligned s \<and> valid_vspace_objs s \<and> valid_asid_table s \<and>
+is_subject aag pool_ptr \<and>
+is_subject aag pt_base \<and>
+is_subject_asid aag asid
+\<rbrace>
+\<comment> \<open>
+         pt_cap <- get_cap ct_slot;
+         pt_base <- return $ acap_obj (the_arch_cap pt_cap);
+\<close>
+   store_asid_pool_entry pool_ptr asid (Some pt_base)
+   \<lbrace>\<lambda>_ s. pas_refined aag s\<rbrace>"
+apply (clarsimp simp: pas_refined_def state_objs_to_policy_def)
+apply (rule hoare_pre)
+apply wpsimp
+apply (rule hoare_vcg_conj_lift)
+prefer 2
+apply (rule hoare_vcg_conj_lift)
+prefer 2
+apply wpsimp
+apply wps
+apply (rule store_asid_pool_entry_state_vrefs)
+apply wps
+apply (rule store_asid_pool_entry_state_vrefs)
+apply clarsimp
+
+
+apply (frule (1) pool_for_asid_validD)
+apply clarsimp
+
+
+apply (rule conjI)
+
+
+apply (clarsimp simp: auth_graph_map_def)
+
+apply (erule state_bits_to_policy.cases)
+apply (fastforce dest: sbta_caps simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_untyped simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_ts simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_bounds simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt simp: state_objs_to_policy_def)
+apply (fastforce dest: sbta_cdt_transferable simp: state_objs_to_policy_def)
+
+
+apply (case_tac "ptr = pool_ptr")
+apply clarsimp
+
+apply (clarsimp simp: vs_refs_aux_def)
+apply (clarsimp simp: graph_of_def)
+apply (clarsimp split: if_splits)
+
+  apply (simp add: aag_wellformed_refl)
+
+apply (erule subsetD)
+apply clarsimp
+apply (rule_tac x=pool_ptr in exI)
+apply clarsimp
+apply (rule exI, rule conjI, rule refl)
+
+apply (rule sbta_vref)
+apply (clarsimp simp: state_vrefs_def)
+apply (rule exI)
+apply (rule conjI)
+apply (rule_tac x=asid_pool_level in exI)
+apply (rule exI)
+apply (rule conjI)
+apply (rule refl)
+apply (rule_tac x=asid_pool_level in exI)
+apply (rule_tac x=asid in exI)
+apply (rule_tac x=0 in exI)
+apply (rule conjI)
+apply (subst vs_lookup_table_def)
+apply (clarsimp simp: obind_def aobjs_of_Some)
+apply (fastforce simp: aobjs_of_Some obj_at_def asid_pools_of_ko_at)
+apply (fastforce simp: vs_refs_aux_def graph_of_def)
+
+apply (case_tac "ptr = pt_base")
+apply clarsimp
+
+apply (clarsimp simp: pts_of_Some)
+
+apply (subgoal_tac "vs_refs_aux max_pt_level (PageTable pt) = {}", clarsimp)
+apply_trace (clarsimp simp: vs_refs_aux_def)
+apply (clarsimp simp: kernel_mappings_only_def)
+apply (clarsimp simp: graph_of_def pte_ref2_def)
+
+apply (simp only: if_False)
+apply (drule sbta_vref)
+apply fastforce
+
+
+apply clarsimp
+
+apply (erule state_asids_to_policy_aux.cases)
+
+apply (erule subsetD) back
+apply (fastforce dest: sata_asid)
+
+
+
+
+
+apply (case_tac "poolptr = pool_ptr")
+apply clarsimp
+
+apply (clarsimp simp: vs_refs_aux_def)
+apply (clarsimp simp: graph_of_def)
+apply (clarsimp split: if_splits)
+
+apply (clarsimp simp: pool_for_asid_def)
+
+thm valid_asid_table_def
+apply (clarsimp simp: asid_pools_of_ko_at obj_at_def)
+
+apply (clarsimp simp: valid_asid_table_def)
+apply (clarsimp simp: inj_on_def)
+apply (drule_tac x="asid_high_bits_of asid" in bspec, clarsimp)
+apply (drule_tac x="asid_high_bits_of asida" in bspec, clarsimp)
+apply clarsimp
+
+apply (prop_tac "asid_low_bits_of asida = asid_low_bits_of asid")
+
+apply (simp add: asid_low_bits_of_mask_eq[symmetric])
+apply (clarsimp simp: ucast_ucast_b is_up_def source_size_def target_size_def word_size)
+
+apply (prop_tac "is_up UCAST(9 \<rightarrow> 64)")
+apply (clarsimp simp: ucast_ucast_b is_up_def source_size_def target_size_def word_size)
+apply (drule inj_ucast[OF refl])
+apply (clarsimp simp: inj_def)
+
+apply (drule asid_high_low)
+apply clarsimp
+
+  apply (metis aag_wellformed_refl)
+
+apply (erule subsetD) back
+apply (rule sata_asid_lookup)
+apply fastforce
+apply (clarsimp simp: state_vrefs_def)
+
+apply (rule exI)
+apply (rule conjI)
+apply (rule_tac x=asid_pool_level in exI)
+apply (rule exI)
+apply (rule conjI)
+apply (rule refl)
+apply (rule_tac x=asid_pool_level in exI)
+apply (rule_tac x=asid in exI)
+apply (rule_tac x=0 in exI)
+apply (rule conjI)
+apply (subst vs_lookup_table_def)
+apply (clarsimp simp: obind_def aobjs_of_Some)
+apply (fastforce simp: aobjs_of_Some obj_at_def asid_pools_of_ko_at)
+
+apply (subst vs_refs_aux_def)
+apply (fastforce simp: graph_of_def)
+apply clarsimp
+
+apply (case_tac "poolptr = pt_base")
+apply (clarsimp simp: vs_refs_aux_def pts_of_Some)
+
+apply (simp only: if_False)
+apply (erule subsetD) back
+apply (rule sata_asid_lookup[rotated])
+apply assumption
+apply assumption
+
+apply (erule subsetD) back
+apply (fastforce dest: sata_asidpool)
+done
+
+crunches copy_global_mappings
+  for pspace_aligned[wp]: pspace_aligned
+  and valid_asid_table[wp]: valid_asid_table
+  (wp: crunch_wps )
+
+lemma store_pte_valid_objs [wp]:
+  "\<lbrace>\<lambda>s. valid_caps (caps_of_state s) s\<rbrace> store_pte p pte \<lbrace>\<lambda>_s . valid_caps (caps_of_state s) s\<rbrace>"
+  apply (simp add: store_pte_def set_pt_def bind_assoc set_object_def get_object_def)
+  apply (wpsimp simp_del: fun_upd_apply)
+apply (subst caps_of_state_fun_upd)
+apply (clarsimp simp: obj_at_def)
+apply (clarsimp simp: valid_caps_def)
+apply (subst valid_cap_same_type)
+apply fastforce+
+apply (clarsimp simp: obj_at_def)
+oops
+
+
+lemma
+"copy_global_mappings pt_base
+       \<lbrace>\<lambda>s. vs_lookup_table level asid vref s \<noteq> Some (level, pt_base)\<rbrace>"
+unfolding copy_global_mappings_def
+apply wpsimp
+apply (rule hoare_strengthen_post)
+apply (rename_tac gpt base pt_size)
+apply (rule_tac P="\<lambda>s. (\<forall>x \<in> set [base .e. pt_size - 1]. \<forall>level. \<not> \<exists>\<rhd> (level, table_base (pt_base + (x << pte_bits))) s) \<and>
+           vref \<in> user_region \<and>
+           vs_lookup_table level asid vref s \<noteq> Some (level, pt_base) \<and>
+ pspace_aligned s \<and> valid_objs s \<and> valid_vspace_objs s \<and> valid_asid_table s
+\<and> unique_table_refs s \<and> valid_vs_lookup s
+"
+and S="set [base .e. pt_size - 1]"
+in mapM_x_wp)
+thm mapM_x_inv_wp
+apply (rule hoare_seq_ext)
+apply wps
+apply_trace (wpsimp wp: hoare_vcg_all_lift hoare_vcg_imp_lift' store_pte_vs_lookup_table_unreachable
+store_pte_valid_vs_lookup_unreachable
+store_pte_valid_vspace_objs
+)
+apply wpsimp
+apply auto[1]
+apply (clarsimp simp: ptes_of_wellformed_pte)
+apply (clarsimp simp: valid_objs_caps)
+oops
+
+
+
+lemma copy_global_mappings_vs_lookup_table_noteq:
+  "\<lbrace> (\<lambda>s. vref \<in> user_region \<and>
+vs_lookup_table level asid vref s \<noteq> Some (level, pt_ptr)) and invs and K (is_aligned pt_ptr pt_bits) and
+     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, pt_ptr) s) \<rbrace>
+   copy_global_mappings pt_ptr
+   \<lbrace>\<lambda>_ s. vs_lookup_table level asid vref s \<noteq> Some (level, pt_ptr)\<rbrace>"
+  unfolding copy_global_mappings_def
+apply clarsimp
+  apply wp
+      apply (rule hoare_strengthen_post)
+       apply (rule_tac P="(\<lambda>s. vref \<in> user_region \<and> vs_lookup_table level asid vref s \<noteq> Some (level, pt_ptr)) and pspace_aligned and valid_vspace_objs and valid_asid_table and
+unique_table_refs and
+            valid_vs_lookup and valid_objs and
+ (\<lambda>s. is_aligned pt_ptr pt_bits \<and>
+
+ (\<forall>level. \<not> \<exists>\<rhd> (level, table_base (pt_ptr)) s) )" in mapM_x_wp')
+
+apply (wpsimp wp: store_pte_state_vrefs_unreachable store_pte_valid_vspace_objs
+hoare_vcg_all_lift hoare_vcg_imp_lift'
+store_pte_vs_lookup_table_unreachable
+store_pte_valid_vs_lookup_unreachable
+)
+
+apply (prop_tac "table_base (pt_ptr + (x << pte_bits)) = pt_ptr")
+apply (frule_tac i=x in is_aligned_pte_offset)
+      apply (metis mask_2pm1 table_base_plus)
+
+apply (clarsimp simp: valid_objs_caps)
+  using ptes_of_wellformed_pte apply blast
+apply clarsimp
+
+apply wpsimp
+apply clarsimp
+apply (intro conjI; fastforce?)
+done
+
+
+lemma copy_global_mappings_valid_vspace_objs:
+  "\<lbrace>  invs and K (is_aligned pt_ptr pt_bits) and
+     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, pt_ptr) s)
+ \<rbrace>
+   copy_global_mappings pt_ptr
+   \<lbrace>\<lambda>_ s. valid_vspace_objs s\<rbrace>"
+  unfolding copy_global_mappings_def
+apply clarsimp
+  apply wp
+      apply (rule hoare_strengthen_post)
+       apply (rule_tac P="
+ pspace_aligned and valid_vspace_objs and valid_asid_table and
+unique_table_refs and
+            valid_vs_lookup and valid_objs and
+ (\<lambda>s. is_aligned pt_ptr pt_bits \<and>
+
+ (\<forall>level. \<not> \<exists>\<rhd> (level, table_base (pt_ptr)) s) )" in mapM_x_wp')
+
+apply (wpsimp wp: store_pte_state_vrefs_unreachable store_pte_valid_vspace_objs
+hoare_vcg_all_lift hoare_vcg_imp_lift'
+store_pte_vs_lookup_table_unreachable
+store_pte_valid_vs_lookup_unreachable
+)
+
+apply (prop_tac "table_base (pt_ptr + (x << pte_bits)) = pt_ptr")
+apply (frule_tac i=x in is_aligned_pte_offset)
+      apply (metis mask_2pm1 table_base_plus)
+
+apply (clarsimp simp: valid_objs_caps)
+  using ptes_of_wellformed_pte apply blast
+apply clarsimp
+
+apply wpsimp
+apply clarsimp
+apply (intro conjI; fastforce?)
+done
+
 
 lemma perform_asid_pool_invocation_pas_refined [wp]:
   "\<lbrace>pas_refined aag and invs and valid_apinv api and K (authorised_asid_pool_inv aag api)\<rbrace>
    perform_asid_pool_invocation api
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: perform_asid_pool_invocation_def)
-  apply (rule hoare_pre)
-  apply (wp get_cap_auth_wp[where aag = aag] set_cap_pas_refined_not_transferable | wpc)+
-  apply (clarsimp simp: authorised_asid_pool_inv_def cap_links_asid_slot_def
-                        is_subject_asid_into_loas aag_cap_auth_def)
-  apply (clarsimp simp: cap_auth_conferred_def arch_cap_auth_conferred_def
-                        is_cap_simps is_page_cap_def auth_graph_map_mem
-                        pas_refined_all_auth_is_owns pas_refined_refl cli_no_irqs
-                        cte_wp_at_caps_of_state
-                 dest!: graph_ofD)
-  apply (clarsimp split: if_split_asm)
-   apply (clarsimp simp add: pas_refined_refl auth_graph_map_def2
-                             mask_asid_low_bits_ucast_ucast[symmetric]
-                             valid_apinv_def obj_at_def)
-   apply (drule(2) asid_pool_uniqueness)
-    apply (simp add: obj_at_def)
-   apply (case_tac "asid = 0"; simp add: pas_refined_refl)
-   apply (simp add: asid_low_high_bits[rotated, OF arg_cong[where f=ucast]])
-  apply (clarsimp simp: obj_at_def)
-  apply (frule (2) asid_pool_into_aag)
-  apply (drule kheap_eq_state_vrefsD)
-  apply (clarsimp simp: auth_graph_map_def2 pas_refined_refl)
-  apply (clarsimp simp: pas_refined_def vs_refs_no_global_pts_def)
-  apply (erule subsetD, erule state_asids_to_policy_aux.intros,
-         simp add: split_def, rule image_eqI[rotated], erule graph_ofI)
-  apply simp
-  done
 
-definition authorised_page_directory_inv :: "'a PAS \<Rightarrow> page_directory_invocation \<Rightarrow> bool" where
-  "authorised_page_directory_inv aag pdi \<equiv> True"
+apply (wpsimp)
+apply (wpsimp wp: store_asid_pool_entry_pas_refined)
+apply_trace (wpsimp wp: copy_global_mappings_pas_refined)
+apply (wpsimp wp: hoare_vcg_all_lift hoare_vcg_imp_lift')
+apply (wpsimp wp: copy_global_mappings_vs_lookup_table_noteq)
+apply wpsimp
+apply (clarsimp simp: ako_asid_pools_of)
+apply_trace (wpsimp wp: hoare_vcg_all_lift hoare_vcg_imp_lift' copy_global_mappings_valid_vspace_objs)
+apply wpsimp
+apply clarsimp
+apply (strengthen invs_psp_aligned invs_valid_asid_table)
+apply (clarsimp simp: conj_ac cong: conj_cong imp_cong)
+apply (wpsimp wp: arch_update_cap_invs_map set_cap_pas_refined_not_transferable
+hoare_vcg_all_lift hoare_vcg_imp_lift'
+)
+apply (wpsimp wp: get_cap_wp)+
+apply (clarsimp simp: conj_ac)
+apply (rule conjI, fastforce)+
 
-*)
+apply (clarsimp simp: valid_apinv_def)
+
+apply (clarsimp simp: cte_wp_at_caps_of_state)
+apply (clarsimp simp: is_PageTableCap_def is_ArchObjectCap_def)
+apply (clarsimp split: option.splits)
+apply (clarsimp simp: authorised_asid_pool_inv_def)
+
+apply (intro conjI)
+  using caps_of_state_aligned_page_table apply blast
+apply (fastforce dest: cap_not_in_valid_global_refs)
+apply (drule (1) cap_cur_auth_caps_of_state)
+apply clarsimp
+apply (clarsimp simp: aag_cap_auth_def cap_auth_conferred_def arch_cap_auth_conferred_def)
+  using pas_refined_Control apply fastforce
+
+apply (drule (1) caps_of_state_valid)
+apply (clarsimp simp: update_map_data_def)
+apply (clarsimp simp: valid_cap_def cap_aligned_def wellformed_mapdata_def)
+
+apply (drule (1) cap_cur_auth_caps_of_state)
+apply clarsimp
+apply (clarsimp simp: update_map_data_def)
+apply (clarsimp simp: aag_cap_auth_def cap_auth_conferred_def arch_cap_auth_conferred_def
+cap_links_asid_slot_def label_owns_asid_slot_def cap_links_irq_def)
+  using pas_refined_refl apply blast
+
+  using invs_valid_table_caps valid_table_caps_def apply blast
+  apply (simp add: asid_bits_of_defs(2))
+
+
+apply (frule (1) caps_of_state_valid)
+apply (clarsimp simp: valid_cap_def)
+    apply (clarsimp simp: obj_at_def)
+apply (rename_tac asid' pool_ptr a b acap_obj level asid vref pt)
+   apply (drule (1) vs_lookup_table_valid_cap; clarsimp)
+   apply (frule (1) cap_to_pt_is_pt_cap, simp add: pts_of_Some aobjs_of_Some, fastforce intro: valid_objs_caps)
+   apply (drule (1) unique_table_refsD[rotated]; clarsimp)
+   apply (clarsimp simp: is_cap_simps)
+
+apply (frule (1) caps_of_state_valid)
+apply (clarsimp simp: valid_cap_def)
+    apply (clarsimp simp: obj_at_def)
+apply (rename_tac asid' pool_ptr a b acap_obj level asid vref pt)
+   apply (drule (1) vs_lookup_table_valid_cap; clarsimp)
+   apply (frule (1) cap_to_pt_is_pt_cap, simp add: pts_of_Some aobjs_of_Some, fastforce intro: valid_objs_caps)
+   apply (drule (1) unique_table_refsD[rotated]; clarsimp)
+   apply (clarsimp simp: is_cap_simps)
+
+apply (clarsimp simp: is_arch_update_def update_map_data_def is_cap_simps cap_master_cap_def)
+
+done
+
+
 
 definition authorised_arch_inv :: "'a PAS \<Rightarrow> arch_invocation \<Rightarrow> bool" where
  "authorised_arch_inv aag ai \<equiv> case ai of
@@ -1367,6 +2710,17 @@ lemma invoke_arch_respects:
   done
 
 
+
+
+
+
+
+
+thm perform_asid_control_invocation_def
+thm perform_asid_pool_invocation_def
+
+
+
 thm
 perform_page_table_invocation_pas_refined
 perform_page_invocation_pas_refined
@@ -1381,12 +2735,11 @@ lemma invoke_arch_pas_refined:
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: arch_perform_invocation_def valid_arch_inv_def)
   apply (rule hoare_pre)
-  apply (wp | wpc)+
-sorry (*
-  apply (fastforce simp add: authorised_arch_inv_def)
-  done *)
+  apply (wp perform_page_table_invocation_pas_refined | wpc)+
+apply (auto simp: authorised_arch_inv_def)
+done
 
-end (*
+(*
 
 lemma create_mapping_entries_authorised_slots [wp]:
   "\<lbrace>\<exists>\<rhd> pd and invs and pas_refined aag and
@@ -1427,6 +2780,7 @@ lemma x_t2n_sub_1_neg_mask:
 
 lemmas vmsz_aligned_t2n_neg_mask =
   x_t2n_sub_1_neg_mask[OF _ pageBitsForSize_le_t29, folded vmsz_aligned_def]
+*)
 
 lemma decode_arch_invocation_authorised:
   "\<lbrace>invs and pas_refined aag and cte_wp_at ((=) (ArchObjectCap cap)) slot
@@ -1438,6 +2792,10 @@ lemma decode_arch_invocation_authorised:
    arch_decode_invocation label msg x_slot slot cap excaps
    \<lbrace>\<lambda>rv _. authorised_arch_inv aag rv\<rbrace>,-"
   unfolding arch_decode_invocation_def authorised_arch_inv_def aag_cap_auth_def
+
+apply (unfold decode_asid_pool_invocation_def)
+oops
+(*
   apply (rule hoare_pre)
    apply (simp add: split_def Let_def split del: if_split
               cong: cap.case_cong arch_cap.case_cong if_cong option.case_cong)
@@ -1608,7 +2966,7 @@ lemma delete_asid_respects:
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
   by (wpsimp wp: set_asid_pool_respects_clear hoare_vcg_all_lift
            simp: obj_at_def pas_refined_refl delete_asid_def asid_pool_integrity_def)
-
+*)
 end
 
 
@@ -1617,7 +2975,7 @@ context begin interpretation Arch .
 requalify_facts
   invoke_arch_pas_refined
   invoke_arch_respects
-  decode_arch_invocation_authorised
+ (* decode_arch_invocation_authorised *)
 
 requalify_consts
   authorised_arch_inv
