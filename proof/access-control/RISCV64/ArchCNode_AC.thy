@@ -352,7 +352,7 @@ lemma pas_refined_arch_state_update_not_asids[simp]:
   \<Longrightarrow> pas_refined aag (arch_state_update f s) = pas_refined aag s"
   apply (auto simp add: pas_refined_def state_objs_to_policy_def)
 apply (erule subsetD)
-  sorry
+  oops
 
 crunch cdt[wp]: store_pte "\<lambda>s. P (cdt s)"
 
