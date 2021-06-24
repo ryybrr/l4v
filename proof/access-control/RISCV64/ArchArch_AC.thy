@@ -36,14 +36,18 @@ lemma set_mrs_state_vrefs[Arch_AC_assms, wp]:
   done
 
 lemma mul_add_word_size_lt_msg_align_bits_ofnat[Arch_AC_assms]:
-  "\<lbrakk> p < 2 ^ (msg_align_bits - word_size_bits); k < 4 \<rbrakk>
+  "\<lbrakk> p < 2 ^ (msg_align_bits - word_size_bits); k < word_size \<rbrakk>
      \<Longrightarrow> of_nat p * of_nat word_size + k < (2 :: obj_ref) ^ msg_align_bits"
   apply (rule is_aligned_add_less_t2n[where n=word_size_bits])
      apply (simp_all add: msg_align_bits' word_size_word_size_bits is_aligned_mult_triv2)
    apply (simp_all add: word_size_word_size_bits word_size_bits_def)
-   apply (word_bitwise, simp)
+   apply (simp add: word_size_def)
   apply (erule word_less_power_trans_ofnat[where k=3 and m=10, simplified], simp)
   done
+
+lemma zero_less_word_size[Arch_AC_assms, simp]:
+    "0 < (word_size :: obj_ref)"
+  by (simp add: word_size_def)
 
 end
 

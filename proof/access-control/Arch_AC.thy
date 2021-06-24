@@ -154,9 +154,10 @@ locale Arch_AC_1 =
      set_mrs thread buf msgs
      \<lbrace>\<lambda>_ s :: det_ext state. P (state_vrefs s)\<rbrace>"
   and mul_add_word_size_lt_msg_align_bits_ofnat:
-  "\<lbrakk> p < 2 ^ (msg_align_bits - word_size_bits); k < 4 \<rbrakk>
+  "\<lbrakk> p < 2 ^ (msg_align_bits - word_size_bits); k < word_size \<rbrakk>
      \<Longrightarrow> of_nat p * of_nat word_size + k < (2 :: obj_ref) ^ msg_align_bits"
-
+  and zero_less_word_size[simp]:
+    "0 < (word_size :: obj_ref)"
 
 context Arch_AC_1 begin
 
