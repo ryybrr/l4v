@@ -2969,6 +2969,35 @@ lemma decode_arch_invocation_authorised:
   apply auto
   done
 
+
+lemma authorised_arch_inv_sa_update:
+  "authorised_arch_inv aag i (scheduler_action_update (\<lambda>_. act) s) =
+   authorised_arch_inv aag i s"
+  by (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
+              split: arch_invocation.splits page_invocation.splits)
+
+lemma set_thread_state_authorised_arch_inv[wp]:
+  "set_thread_state ref ts \<lbrace>authorised_arch_inv aag i\<rbrace>"
+  unfolding set_thread_state_def
+  apply (wpsimp wp: dxo_wp_weak)
+     apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
+                    split: arch_invocation.splits page_invocation.splits)
+    apply (wpsimp wp: set_object_wp)+
+  apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def
+                        authorised_slots_def vs_lookup_slot_def obind_def
+                 split: arch_invocation.splits page_invocation.splits if_splits option.splits)
+  apply (subgoal_tac "vs_lookup_table level asid vref s = Some (level, b)")
+   apply clarsimp
+  apply (clarsimp simp: vs_lookup_table_def obind_def vspace_for_pool_def
+                 split: option.splits if_splits)
+  apply (subgoal_tac "(\<lambda>p. pte_of p ((pts_of s)(ref := None))) = ptes_of s")
+   apply fastforce
+  apply (rule all_ext)
+  apply (clarsimp simp: pte_of_def obind_def pts_of_Some aobjs_of_Some get_tcb_def
+                 split: option.splits)
+  done
+
+
 end
 
 
@@ -2978,10 +3007,14 @@ requalify_facts
   invoke_arch_pas_refined
   invoke_arch_respects
   decode_arch_invocation_authorised
+  authorised_arch_inv_sa_update
+  set_thread_state_authorised_arch_inv
 
 requalify_consts
   authorised_arch_inv
 
 end
+
+declare set_thread_state_authorised_arch_inv[wp]
 
 end

@@ -172,44 +172,15 @@ lemma in_extended: "(u,a) \<in> fst (do_extended_op f s) \<Longrightarrow> \<exi
   by (fastforce simp: do_extended_op_def bind_def gets_def return_def get_def
                       mk_ef_def modify_def select_f_def put_def trans_state_update')
 
-
-context begin interpretation Arch .
-
 lemma set_scheduler_action_authorised_arch_inv[wp]:
   "set_scheduler_action act \<lbrace>authorised_arch_inv aag i\<rbrace>"
   unfolding set_scheduler_action_def
-  by (wpsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
-            split: arch_invocation.splits page_invocation.splits)
-
-lemma set_thread_state_authorised_arch_inv[wp]:
-  "set_thread_state ref ts \<lbrace>authorised_arch_inv aag i\<rbrace>"
-  unfolding set_thread_state_def
-  apply (wpsimp wp: dxo_wp_weak)
-     apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
-                    split: arch_invocation.splits page_invocation.splits)
-    apply (wpsimp wp: set_object_wp)+
-  apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def
-                        authorised_slots_def vs_lookup_slot_def obind_def
-                 split: arch_invocation.splits page_invocation.splits if_splits option.splits)
-  apply (subgoal_tac "vs_lookup_table level asid vref s = Some (level, b)")
-   apply clarsimp
-  apply (clarsimp simp: vs_lookup_table_def obind_def vspace_for_pool_def
-                 split: option.splits if_splits)
-  apply (subgoal_tac "(\<lambda>p. pte_of p ((pts_of s)(ref := None))) = ptes_of s")
-   apply fastforce
-  apply (rule all_ext)
-  apply (clarsimp simp: pte_of_def obind_def pts_of_Some aobjs_of_Some get_tcb_def
-                 split: option.splits)
-  done
-
-
-end
-
+  by wpsimp
 
 lemma set_thread_state_authorised[wp]:
   "\<lbrace>authorised_invocation aag i and (\<lambda>s. thread = cur_thread s) and valid_objs\<rbrace>
    set_thread_state thread Restart
-   \<lbrace>\<lambda>rv. authorised_invocation aag i\<rbrace>"
+   \<lbrace>\<lambda>_. authorised_invocation aag i\<rbrace>"
   apply (cases i; simp add: authorised_invocation_def)
           apply (wpsimp wp: sts_valid_untyped_inv ct_in_state_set
                             hoare_vcg_ex_lift sts_obj_at_impossible)+
@@ -223,7 +194,7 @@ lemma set_thread_state_authorised[wp]:
 
 lemma sts_first_restart:
   "\<lbrace>(=) st and (\<lambda>s. thread = cur_thread s)\<rbrace>
-     set_thread_state thread Structures_A.thread_state.Restart
+   set_thread_state thread Structures_A.thread_state.Restart
    \<lbrace>\<lambda>rv s. \<forall>p ko. kheap s p = Some ko \<longrightarrow>
            (is_tcb ko \<longrightarrow> p \<noteq> cur_thread st) \<longrightarrow> kheap st p = Some ko\<rbrace>"
   unfolding set_thread_state_def
