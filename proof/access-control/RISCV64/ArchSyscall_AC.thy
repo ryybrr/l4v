@@ -5,8 +5,7 @@
  *)
 
 theory ArchSyscall_AC
-imports
-  Syscall_AC
+imports Syscall_AC
 begin
 
 context Arch begin global_naming ARM_A
@@ -55,6 +54,7 @@ lemma cancel_badged_sends_cur_thread[Syscall_AC_assms, wp]:
   unfolding cancel_badged_sends_def
   by (wpsimp wp: dxo_wp_weak filterM_preserved crunch_wps)
 
+(* FIXME ryanb *)
 lemma state_vrefs_cur_thread_update[Syscall_AC_assms, simp]:
   "state_vrefs (cur_thread_update f s) = state_vrefs s"
   by (simp add: state_vrefs_def)
@@ -83,15 +83,9 @@ crunches ackInterrupt, resetTimer
   for underlying_memory_inv[Syscall_AC_assms, wp]: "\<lambda>s. P (underlying_memory s)"
   (simp: maskInterrupt_def)
 
-(* FIXME AC: will probably break on ARM_HYP.handle_reserved_irq *)
 crunches arch_mask_irq_signal, handle_reserved_irq
   for integrity[Syscall_AC_assms, wp]: "integrity aag X st"
   (wp: dmo_no_mem_respects)
-
-lemma ctxt_IP_update_def:
-  "ctxt_IP_update ctxt = (case ctxt of
-  (UserContext ctxt') \<Rightarrow> UserContext (ctxt'(NextIP := ctxt' FaultIP)))"
-  by (cases ctxt; clarsimp)
 
 lemma set_thread_state_restart_to_running_respects[Syscall_AC_assms]:
   "\<lbrace>integrity aag X st and st_tcb_at ((=) Restart) thread and K (pasMayActivate aag)\<rbrace>
@@ -115,8 +109,8 @@ lemma set_thread_state_restart_to_running_respects[Syscall_AC_assms]:
   done
 
 lemma getActiveIRQ_inv[Syscall_AC_assms]:
-  "\<forall>f s. P s \<longrightarrow> P (irq_state_update f s) \<Longrightarrow>
-   \<lbrace>P\<rbrace> getActiveIRQ irq \<lbrace>\<lambda>rv. P\<rbrace>"
+  "\<forall>f s. P s \<longrightarrow> P (irq_state_update f s)
+   \<Longrightarrow> \<lbrace>P\<rbrace> getActiveIRQ irq \<lbrace>\<lambda>rv. P\<rbrace>"
   by (wpsimp simp: irq_state_independent_def)
 
 lemma getActiveIRQ_rv_None[Syscall_AC_assms]:
@@ -130,17 +124,6 @@ lemma arch_activate_idle_thread_respects[Syscall_AC_assms, wp]:
 lemma arch_activate_idle_thread_pas_refined[Syscall_AC_assms, wp]:
   "arch_activate_idle_thread t \<lbrace>pas_refined aag\<rbrace>"
   unfolding arch_activate_idle_thread_def by wpsimp
-
-(* FIXME ryanb: shouldn't be in ARM?
-lemma integrity_exclusive_state_update[Syscall_AC_assms, simp]:
-  "integrity aag X st (s\<lparr>machine_state := exclusive_state_update f (machine_state s)\<rparr>) =
-   integrity aag X st s"
-  unfolding integrity_def by simp
-
-lemma dmo_clearExMonitor_respects_globals[Syscall_AC_assms, wp]:
-  "do_machine_op clearExMonitor \<lbrace>integrity aag X st\<rbrace>"
-  by (wpsimp wp: dmo_wp simp: clearExMonitor_def)
-*)
 
 lemma arch_switch_to_thread_respects[Syscall_AC_assms, wp]:
   "arch_switch_to_thread t \<lbrace>integrity aag X st\<rbrace>"
@@ -166,12 +149,8 @@ lemma handle_reserved_irq_arch_state[Syscall_AC_assms, wp]:
   "handle_reserved_irq irq \<lbrace>\<lambda>s :: det_ext state. P (arch_state s)\<rbrace>"
   unfolding handle_reserved_irq_def by wpsimp
 
-crunch arch_state[Syscall_AC_assms, wp]: init_arch_objects "\<lambda>s. P (arch_state s)"
-  (wp: crunch_wps)
-
 crunch ct_active [Syscall_AC_assms, wp]: arch_post_cap_deletion "ct_active"
-  (wp: crunch_wps filterM_preserved hoare_unless_wp
-   simp: crunch_simps ignore: do_extended_op)
+  (wp: crunch_wps filterM_preserved hoare_unless_wp simp: crunch_simps ignore: do_extended_op)
 
 crunches
   arch_post_modify_registers, arch_invoke_irq_control,

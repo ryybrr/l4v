@@ -227,6 +227,11 @@ subsection \<open>Misc definitions\<close>
 fun ctxt_IP_update where
   "ctxt_IP_update (UserContext ctxt) = UserContext (ctxt(NextIP := ctxt FaultIP))"
 
+lemma ctxt_IP_update_def:
+  "ctxt_IP_update ctxt =
+   (case ctxt of (UserContext ctxt') \<Rightarrow> UserContext (ctxt'(NextIP := ctxt' FaultIP)))"
+  by (cases ctxt; clarsimp)
+
 abbreviation arch_IP_update where
   "arch_IP_update arch \<equiv> arch_tcb_context_set (ctxt_IP_update (arch_tcb_context_get arch)) arch"
 
