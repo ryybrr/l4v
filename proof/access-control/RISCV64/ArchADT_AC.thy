@@ -25,192 +25,261 @@ lemma objs_valid_tcb_vtable:
     apply fastforce+
   done
 
-lemma pd_of_thread_same_agent:
-  "\<lbrakk> pas_refined aag s; is_subject aag tcb_ptr;
-     get_pd_of_thread (kheap s) (arch_state s) tcb_ptr = pd; pd \<noteq> arm_global_pd (arch_state s) \<rbrakk>
-     \<Longrightarrow> pasObjectAbs aag tcb_ptr = pasObjectAbs aag pd"
-  apply (rule_tac aag="pasPolicy aag" in aag_wellformed_Control[rotated])
-   apply (fastforce simp: pas_refined_def)
-  apply (rule pas_refined_mem[rotated], simp)
-  apply (clarsimp simp: get_pd_of_thread_eq)
-  apply (cut_tac ptr="(tcb_ptr, tcb_cnode_index 1)" in sbta_caps)
-     prefer 4
-     apply (simp add: state_objs_to_policy_def)
-    apply (subst caps_of_state_tcb_cap_cases)
-      apply (simp add: get_tcb_def)
-     apply (simp add: dom_tcb_cap_cases[simplified])
-    apply simp
-   apply (simp add: obj_refs_def)
-  apply (simp add: cap_auth_conferred_def arch_cap_auth_conferred_def is_page_cap_def)
+
+(* FIXME ryanb - weaken original *)
+lemma get_page_info_gpd_kmaps:
+  "\<lbrakk>valid_global_vspace_mappings s; valid_arch_state s;
+    get_page_info (aobjs_of s) (riscv_global_pt (arch_state s)) p = Some (b, a, attr, r)\<rbrakk>
+   \<Longrightarrow> p \<in> kernel_mappings"
+  apply (clarsimp simp: get_page_info_def in_omonad pt_lookup_slot_def pt_lookup_slot_from_level_def)
+  apply (subst (asm) pt_walk.simps)
+  apply (fastforce dest: pte_info_not_InvalidPTE global_pt_not_invalid_kernel
+                   simp: valid_arch_state_def in_omonad)
   done
 
-lemma pd_of_thread_page_directory_at:
-  "\<lbrakk> invs s; get_pd_of_thread (kheap s) (arch_state s) tcb \<noteq> arm_global_pd (arch_state s) \<rbrakk>
-     \<Longrightarrow> page_directory_at ((get_pd_of_thread (kheap s) (arch_state s) tcb)) s"
-  apply (clarsimp simp: get_pd_of_thread_def
-                 split: option.splits kernel_object.splits cap.splits arch_cap.splits if_splits)
-  apply (frule_tac t=tcb in objs_valid_tcb_vtable[OF invs_valid_objs])
-   apply (simp add: get_tcb_def)
-  apply (fastforce simp: valid_cap_def2 valid_cap_ref_def valid_arch_cap_ref_simps)
-  done
+lemma level_of_sz_vmpage_size_of_level[simp]:
+  "level \<le> max_pt_level \<Longrightarrow> level_of_sz (vmpage_size_of_level level) = level"
+  by (induct level; fastforce simp: level_of_sz_def vmpage_size_of_level_def max_pt_level_def2 split: if_splits)
+
+
+lemma mask_ptTranslationBits_ucast_ucast:
+  "((asid::machine_word) && mask ptTranslationBits) = ucast (ucast asid :: 9 word)"
+  by (word_eqI simp: ptTranslationBits_def)
+
+lemma table_index_offset_pt_bits_left:
+  "is_aligned pt_ref pt_bits \<Longrightarrow>
+   table_index (pt_slot_offset lvl pt_ref vref) = ucast (vref >> pt_bits_left lvl)"
+apply (clarsimp simp: pt_slot_offset_def
+pt_index_def mask_ptTranslationBits_ucast_ucast is_aligned_mask
+)
+  using is_aligned_neg_mask_eq' mask_eq_0_eq_x table_index_plus_ucast by blast
+
+
+lemma ptrFromPAddr_plus: "ptrFromPAddr (x + y) = ptrFromPAddr x + y"
+  by (simp add: ptrFromPAddr_def)
 
 lemma ptr_offset_in_ptr_range:
   "\<lbrakk> invs s; x \<notin> kernel_mappings;
-     get_pd_of_thread (kheap s) (arch_state s) tcb \<noteq> arm_global_pd (arch_state s);
-     get_page_info (\<lambda>obj. get_arch_obj (kheap s obj))
-                   (get_pd_of_thread (kheap s) (arch_state s) tcb) x = Some (base, sz, attr, r) \<rbrakk>
+     get_vspace_of_thread (kheap s) (arch_state s) tcb \<noteq> global_pt s;
+     get_page_info (aobjs_of s)
+                   (get_vspace_of_thread (kheap s) (arch_state s) tcb) x = Some (base, sz, attr, r) \<rbrakk>
      \<Longrightarrow> ptrFromPAddr base + (x && mask sz) \<in> ptr_range (ptrFromPAddr base) sz"
   apply (simp add: ptr_range_def mask_def)
   apply (rule conjI)
    apply (rule_tac b="2 ^ sz - 1" in word_plus_mono_right2)
     apply (frule some_get_page_info_umapsD)
-          apply (clarsimp simp: get_pd_of_thread_reachable invs_vspace_objs
+          apply (fastforce dest: get_vspace_of_thread_reachable
+simp: invs_vspace_objs canonical_not_kernel_is_user get_page_info_def
                                 invs_psp_aligned invs_valid_asid_table invs_valid_objs)+
+    apply clarsimp
     apply (drule is_aligned_ptrFromPAddr_n)
-     apply (simp add: pageBitsForSize_def split: vmpage_size.splits)
+     apply (simp add: pageBitsForSize_def pageBits_def canonical_bit_def ptTranslationBits_def split: vmpage_size.splits)
     apply (clarsimp simp: is_aligned_no_overflow' word_and_le1)+
   apply (subst p_assoc_help)
   apply (rule word_plus_mono_right)
    apply (rule word_and_le1)
   apply (frule some_get_page_info_umapsD)
-        apply (clarsimp simp: get_pd_of_thread_reachable invs_vspace_objs
-                              invs_psp_aligned invs_valid_asid_table invs_valid_objs)+
+          apply (fastforce dest: get_vspace_of_thread_reachable
+simp: invs_vspace_objs canonical_not_kernel_is_user get_page_info_def
+                                invs_psp_aligned invs_valid_asid_table invs_valid_objs)+
+    apply clarsimp
   apply (drule is_aligned_ptrFromPAddr_n)
-   apply (simp add: pageBitsForSize_def split: vmpage_size.splits)
+     apply (simp add: pageBitsForSize_def pageBits_def canonical_bit_def ptTranslationBits_def split: vmpage_size.splits)
   apply (clarsimp simp: is_aligned_no_overflow')
   done
 
-lemma kernel_mappings_kernel_mapping_slots:
-  "x \<notin> kernel_mappings \<Longrightarrow> ucast (x >> 20) \<notin> kernel_mapping_slots"
-  apply (rule kernel_base_kernel_mapping_slots)
-  apply (simp add: kernel_mappings_def)
-  done
-
-lemmas kernel_mappings_kernel_mapping_slots' =
-  kernel_mappings_kernel_mapping_slots[simplified kernel_mapping_slots_def, simplified]
-
-lemma ptable_state_objs_to_policy:
-  "\<lbrakk> invs s; ptable_lift tcb s x = Some ptr;
-     auth \<in> vspace_cap_rights_to_auth (ptable_rights tcb s x);
-     get_pd_of_thread (kheap s) (arch_state s) tcb \<noteq> arm_global_pd (arch_state s);
-     \<forall>word1 set1 word2. get_pd_entry (\<lambda>obj. get_arch_obj (kheap s obj))
-                                     (get_pd_of_thread (kheap s) (arch_state s) tcb) x \<noteq>
-                        Some (PageTablePDE word1 set1 word2); x \<notin> kernel_mappings \<rbrakk>
-     \<Longrightarrow> (get_pd_of_thread (kheap s) (arch_state s) tcb, auth, ptrFromPAddr ptr) \<in>
-           state_objs_to_policy s"
-  apply (simp add: state_objs_to_policy_def)
-  apply (rule sbta_vref)
-  apply (clarsimp simp: ptable_lift_def ptable_rights_def state_vrefs_def
-                  split: option.splits)
-  apply (frule pd_of_thread_page_directory_at, simp)
-  apply (clarsimp simp: typ_at_eq_kheap_obj)
-  apply (clarsimp simp: vs_refs_no_global_pts_def)
-  apply (rule_tac x="(ucast (x >> 20), ptrFromPAddr a, aa,
-                      vspace_cap_rights_to_auth b)" in bexI)
-   apply clarsimp
-   apply (rule_tac x="(ptrFromPAddr a + (x && mask aa), auth)" in image_eqI)
-    apply (simp add: ptrFromPAddr_def pptrBaseOffset_def pptrBase_def physBase_def)
-   apply (simp add: ptr_offset_in_ptr_range)
-  apply (simp add: kernel_mappings_kernel_mapping_slots')
-  apply (clarsimp simp: graph_of_def)
-  apply (clarsimp simp: get_page_info_def get_pd_entry_def pde_ref2_def
-                  split: option.splits pde.splits arch_kernel_obj.splits)
-   apply (clarsimp simp: get_arch_obj_def
-                   split: option.splits kernel_object.splits arch_kernel_obj.splits)+
-  done
-
-lemma pt_in_pd_same_agent:
-  "\<lbrakk> pas_refined aag s; is_subject aag pd_ptr; vptr \<notin> kernel_mappings;
-     get_pd_entry (\<lambda>obj. get_arch_obj (kheap s obj)) pd_ptr vptr = Some (PageTablePDE p x xa) \<rbrakk>
-     \<Longrightarrow> pasObjectAbs aag pd_ptr = pasObjectAbs aag (ptrFromPAddr p)"
-  apply (rule_tac aag="pasPolicy aag" in aag_wellformed_Control[rotated])
-   apply (fastforce simp: pas_refined_def)
-  apply (rule pas_refined_mem[rotated], simp)
-  apply (clarsimp simp: get_pd_entry_def get_arch_obj_def
-                 split: option.splits kernel_object.splits arch_kernel_obj.splits)
-  apply (simp add: state_objs_to_policy_def)
-  apply (rule sbta_vref)
-  apply (simp add: state_vrefs_def split: option.splits)
-  apply (clarsimp simp: vs_refs_no_global_pts_def)
-  apply (rule_tac x="(ucast (vptr >> 20), ptrFromPAddr p, 0, {Control})" in bexI)
-   apply simp
-  apply (simp add: kernel_mappings_kernel_mapping_slots' graph_of_def pde_ref2_def)
-  done
-
-lemma pt_in_pd_page_table_at:
-  "\<lbrakk> invs s; get_pd_entry (\<lambda>obj. get_arch_obj (kheap s obj)) pd_ptr x =
-     Some (PageTablePDE word1 set1 word2); (\<exists>\<rhd> pd_ptr) s; x \<notin> kernel_mappings \<rbrakk>
-     \<Longrightarrow> page_table_at (ptrFromPAddr word1) s"
-  apply (clarsimp simp: get_pd_entry_def get_arch_obj_def
-                  split: option.splits kernel_object.splits arch_kernel_obj.splits)
-  apply (rename_tac "fun")
-  apply (subgoal_tac "valid_vspace_obj (PageDirectory fun) s")
-   apply (simp add: kernel_mappings_slots_eq)
-   apply (drule bspec)
-    apply simp+
-  apply (drule invs_vspace_objs)
-  apply (auto simp: obj_at_def invs_vspace_objs valid_vspace_objs_def)
-  done
-
-lemma get_page_info_state_objs_to_policy:
-  "\<lbrakk> invs s; auth \<in> vspace_cap_rights_to_auth r;
-     get_page_info (\<lambda>obj. get_arch_obj (kheap s obj))
-                   (get_pd_of_thread (kheap s) (arch_state s) tcb) x =
-     Some (base, sz, attr, r);
-     get_pd_of_thread (kheap s) (arch_state s) tcb \<noteq> arm_global_pd (arch_state s);
-     get_pd_entry (\<lambda>obj. get_arch_obj (kheap s obj))
-                  (get_pd_of_thread (kheap s) (arch_state s) tcb) x =
-     Some (PageTablePDE word1 set1 word2); x \<notin> kernel_mappings \<rbrakk>
-     \<Longrightarrow> (ptrFromPAddr word1, auth, ptrFromPAddr (base + (x && mask sz))) \<in> state_objs_to_policy s"
-  apply (simp add: state_objs_to_policy_def)
-  apply (rule sbta_vref)
-  apply (clarsimp simp: state_vrefs_def split: option.splits)
-  apply (frule pt_in_pd_page_table_at)
-     apply (simp add: get_pd_of_thread_reachable)+
-  apply (clarsimp simp: typ_at_eq_kheap_obj)
-  apply (clarsimp simp: vs_refs_no_global_pts_def)
-  apply (rule_tac x="(ucast ((x >> 12) && mask 8),  ptrFromPAddr base, sz,
-                      vspace_cap_rights_to_auth r)" in bexI)
-   apply clarsimp
-   apply (rule_tac x="(ptrFromPAddr base + (x && mask sz), auth)" in image_eqI)
-    apply (simp add: ptrFromPAddr_def pptrBaseOffset_def pptrBase_def physBase_def)
-   apply (simp add: ptr_offset_in_ptr_range)
-  apply (clarsimp simp: get_page_info_def get_pd_entry_def get_pt_info_def
-                        get_pt_entry_def get_arch_obj_def pte_ref_def graph_of_def
-                 split: option.splits pte.splits pde.splits arch_kernel_obj.splits)
-  done
 
 lemma user_op_access[ADT_AC_assms]:
   "\<lbrakk> invs s; pas_refined aag s; is_subject aag tcb; ptable_lift tcb s x = Some ptr;
      auth \<in> vspace_cap_rights_to_auth (ptable_rights tcb s x) \<rbrakk>
      \<Longrightarrow> abs_has_auth_to aag auth tcb (ptrFromPAddr ptr)"
   apply (case_tac "x \<in> kernel_mappings")
-   apply (fastforce simp: invs_valid_global_pd_mappings invs_equal_kernel_mappings
+   apply (clarsimp simp: invs_valid_global_pd_mappings invs_equal_kernel_mappings
                           ptable_lift_def ptable_rights_def vspace_cap_rights_to_auth_def
                     dest: some_get_page_info_kmapsD split: option.splits)
-  apply (case_tac "get_pd_of_thread (kheap s) (arch_state s) tcb =
-                   arm_global_pd (arch_state s)")
-   apply (fastforce simp: invs_valid_global_objs invs_arch_state
-                          ptable_lift_def ptable_rights_def
-                   split: option.splits
-                    dest: get_page_info_gpd_kmaps[rotated 2])
-  apply (subst pd_of_thread_same_agent)
-      apply fastforce+
-  apply (case_tac "\<exists>word1 set1 word2. get_pd_entry (\<lambda>obj. get_arch_obj (kheap s obj))
-                                                   (get_pd_of_thread (kheap s) (arch_state s) tcb) x =
-                                      Some (PageTablePDE word1 set1 word2)")
-   apply (clarsimp simp: ptable_lift_def ptable_rights_def split: option.splits)
-   apply (frule pd_of_thread_same_agent)
-      apply fastforce+
-   apply (subst pt_in_pd_same_agent)
-       apply fastforce+
-   apply (rule pas_refined_mem[rotated], simp)
-   apply (rule get_page_info_state_objs_to_policy)
-        apply fastforce+
-  apply (rule pas_refined_mem[rotated], simp)
-  apply (rule ptable_state_objs_to_policy)
-       apply simp+
-  done
+
+apply (drule some_get_page_info_kmapsD)
+apply clarsimp
+apply clarsimp
+  using kernel_mappings_canonical apply blast
+apply fastforce
+apply fastforce
+apply (clarsimp simp: invs_def valid_state_def valid_arch_state_def)
+apply (clarsimp simp: invs_def valid_state_def valid_arch_state_def)
+apply fastforce
+apply fastforce
+apply fastforce
+apply fastforce
+  using get_vspace_of_thread_asid_or_global_pt apply blast
+apply fastforce
+
+apply (clarsimp simp: ptable_lift_def split: option.splits)
+
+apply (insert get_vspace_of_thread_asid_or_global_pt)
+apply (erule_tac x=s in meta_allE)
+apply (erule_tac x=tcb in meta_allE)
+
+apply (case_tac "get_vspace_of_thread (kheap s) (arch_state s) tcb = global_pt s")
+apply clarsimp
+
+apply (drule get_page_info_gpd_kmaps[rotated 2])
+apply fastforce
+apply fastforce
+apply fastforce
+
+apply clarsimp
+
+apply (frule (3) ptr_offset_in_ptr_range)
+
+apply (frule get_vspace_of_thread_reachable)
+apply fastforce
+apply clarsimp
+
+
+apply (clarsimp simp: ptable_rights_def)
+apply (rename_tac addr sz attr rights asid asid' vref)
+apply (prop_tac "asid' = asid")
+apply (drule vs_lookup_table_vspace)
+apply assumption
+apply clarsimp
+apply clarsimp
+apply clarsimp
+
+apply (clarsimp simp: get_vspace_of_thread_def split: option.splits kernel_object.splits
+cap.splits arch_cap.splits if_splits)
+
+apply (clarsimp simp: get_page_info_def)
+
+apply (clarsimp simp: pt_lookup_slot_def)
+
+apply (frule pt_lookup_slot_from_level_is_subject)
+apply fastforce
+apply fastforce
+apply fastforce
+apply assumption
+apply (clarsimp simp: pt_lookup_slot_from_level_def)
+
+apply (prop_tac "vs_lookup_table max_pt_level asid x s = Some (max_pt_level, x41)")
+apply (clarsimp simp: vs_lookup_table_def)
+apply fastforce
+apply fastforce
+  using canonical_not_kernel_is_user apply blast
+
+apply (rule aag_Control_into_owns)
+prefer 2
+apply simp
+
+apply (clarsimp simp: pas_refined_def)
+apply (erule subsetD)
+apply (clarsimp simp: auth_graph_map_def state_objs_to_policy_def)
+
+apply (drule_tac addr="tcb_cnode_index 1" in caps_of_state_tcb)
+apply (clarsimp simp: tcb_cnode_map_def)
+apply (drule sbta_caps)
+apply (fastforce simp: obj_refs_def)
+apply (fastforce simp: cap_auth_conferred_def arch_cap_auth_conferred_def)
+
+apply (rule_tac x=tcb in exI, rule conjI)
+apply clarsimp
+apply (rule exI, rule conjI, rule refl)
+apply fastforce
+
+apply (clarsimp simp: pt_lookup_slot_from_level_def)
+
+apply (prop_tac "vs_lookup_table max_pt_level asid x s = Some (max_pt_level, x41)")
+apply (clarsimp simp: vs_lookup_table_def)
+apply (thin_tac P for P) back
+apply (drule pt_walk_level)
+apply (drule (1) vs_lookup_table_extend)
+apply clarsimp
+
+apply (case_tac "ab = asid_pool_level")
+  apply (simp add: pt_walk_top)
+
+apply (prop_tac "is_aligned bb pt_bits")
+apply (drule vs_lookup_table_is_aligned)
+apply clarsimp
+  using canonical_not_kernel_is_user apply blast
+apply fastforce
+apply fastforce
+apply fastforce
+  using pt_walk_is_aligned apply blast
+
+
+apply clarsimp
+
+apply (clarsimp simp: pte_info_def split: pte.splits)
+
+apply (frule vs_lookup_table_pt_at)
+apply clarsimp
+  using canonical_not_kernel_is_user apply blast
+apply fastforce
+apply fastforce
+apply fastforce
+apply (clarsimp simp: obj_at_def)
+
+
+
+  apply (prop_tac "state_objs_in_policy aag s")
+   apply (clarsimp simp: pas_refined_def)
+  apply (erule subsetD)
+
+  apply (clarsimp simp: auth_graph_map_def)
+  apply (rule_tac x=bb in exI)
+  apply clarsimp
+  apply (rule exI, rule conjI, rule refl)
+
+  apply (clarsimp simp: state_objs_to_policy_def)
+  apply (rule sbta_vref)
+  apply (clarsimp simp: state_vrefs_def)
+  apply (rule exI)
+  apply (rule conjI)
+   apply (rule_tac x=ab in exI)
+   apply (clarsimp simp: aobjs_of_Some)
+   apply (rule exI)
+   apply (rule conjI, rule refl)
+   apply (rule exI)+
+   apply (rule conjI)
+    apply assumption
+  using canonical_not_kernel_is_user apply blast
+  apply (clarsimp simp: vs_refs_aux_def)
+
+
+  apply (rule conjI; clarsimp)
+   apply (clarsimp simp: graph_of_def pte_ref2_def)
+   apply (clarsimp simp: Bex_def)
+   apply (clarsimp simp: ptes_of_Some pts_of_Some aobjs_of_Some)
+   apply (rule_tac x="table_index (pt_slot_offset max_pt_level bb x)" in exI)
+   apply clarsimp
+   apply (rule conjI)
+    apply (rule table_index_max_level_slots)
+  using canonical_not_kernel_is_user apply blast
+    apply clarsimp
+
+   apply (prop_tac "x && mask (pt_bits_left max_pt_level) \<le> mask (pt_bits_left max_pt_level)")
+  using and_and_not and_mask_0_iff_le_mask apply blast
+
+
+   apply (subst table_index_offset_max_pt_level)
+    apply clarsimp
+
+   apply (clarsimp simp: image_iff)
+   apply (fastforce simp: ptrFromPAddr_plus)
+
+
+
+   apply (clarsimp simp: graph_of_def pte_ref2_def)
+   apply (clarsimp simp: ptes_of_Some pts_of_Some aobjs_of_Some)
+   apply (rule_tac x="table_index (pt_slot_offset ab bb x)" in exI)
+   apply clarsimp
+
+   apply (clarsimp simp: image_iff)
+   apply auto[1]
+
+apply (simp add: ptrFromPAddr_plus)
+
+apply (clarsimp simp: table_index_offset_pt_bits_left)
+done
 
 lemma write_in_vspace_cap_rights[ADT_AC_assms]:
   "AllowWrite \<in> ptable_rights (cur_thread s) s va
@@ -224,7 +293,7 @@ global_interpretation ADT_AC_1?: ADT_AC_1
 proof goal_cases
   interpret Arch .
   case 1 show ?case
-    by (unfold_locales; fact ADT_AC_assms)
+    by (unfold_locales; (fact ADT_AC_assms)?)
 qed
 
 end

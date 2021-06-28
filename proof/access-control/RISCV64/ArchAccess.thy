@@ -269,6 +269,7 @@ end
 context begin interpretation Arch .
 
 requalify_consts
+  vspace_cap_rights_to_auth
   aobj_ref'
   acap_asid'
   state_vrefs

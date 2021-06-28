@@ -32,7 +32,7 @@ definition authorised_invocation ::
                                                      \<and> cnode_inv_auth_derivations i' s
    | InvokeIRQControl i' \<Rightarrow> authorised_irq_ctl_inv aag i'
    | InvokeIRQHandler i' \<Rightarrow> authorised_irq_hdl_inv aag i'
-   | InvokeArchObject i' \<Rightarrow> valid_arch_inv i' s \<and> authorised_arch_inv aag i' \<and> ct_active s"
+   | InvokeArchObject i' \<Rightarrow> valid_arch_inv i' s \<and> authorised_arch_inv aag i' s \<and> ct_active s"
 
 lemma perform_invocation_pas_refined:
   "\<lbrace>pas_refined aag and pas_cur_domain aag and einvs and simple_sched_action
@@ -111,6 +111,7 @@ declare AllowSend_def[simp] AllowRecv_def[simp]
 lemma decode_invocation_authorised:
   "\<lbrace>pas_refined aag and valid_cap cap and invs and ct_active and (is_subject aag \<circ> cur_thread) and
     cte_wp_at ((=) cap) slot and ex_cte_cap_to slot and domain_sep_inv (pasMaySendIrqs aag) st' and
+    real_cte_at slot and
     (\<lambda>s. \<forall>r\<in>zobj_refs cap. ex_nonz_cap_to r s) and
     (\<lambda>s. \<forall>r\<in>cte_refs cap (interrupt_irq_node s). ex_cte_cap_to r s) and
     (\<lambda>s. \<forall>cap \<in> set excaps. \<forall>r\<in>cte_refs (fst cap) (interrupt_irq_node s). ex_cte_cap_to r s) and
@@ -164,15 +165,68 @@ lemma decode_invocation_authorised:
    apply (drule (1) pas_refined_Control, simp)
 
   apply (clarsimp simp: cap_links_asid_slot_def label_owns_asid_slot_def)
-  sorry
-(* FIXME ryanb
   apply (fastforce dest!: pas_refined_Control)
   done
-*)
 
 lemma in_extended: "(u,a) \<in> fst (do_extended_op f s) \<Longrightarrow> \<exists>e. a = (trans_state (\<lambda>_. e) s)"
   by (fastforce simp: do_extended_op_def bind_def gets_def return_def get_def
                       mk_ef_def modify_def select_f_def put_def trans_state_update')
+
+
+(* vs_lookup_slot level asid vref s *)
+
+context begin interpretation Arch .
+
+lemma set_scheduler_action_authorised_arch_inv[wp]:
+  "set_scheduler_action action \<lbrace>authorised_arch_inv aag i\<rbrace> "
+  unfolding set_scheduler_action_def
+  apply wpsimp
+apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
+split: arch_invocation.splits page_invocation.splits
+)
+done
+
+lemma set_thread_state_authorised_arch_inv[wp]:
+  "set_thread_state ref ts \<lbrace>authorised_arch_inv aag i\<rbrace> "
+  unfolding set_thread_state_def
+  apply (wpsimp wp: dxo_wp_weak)
+apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
+split: arch_invocation.splits page_invocation.splits
+)
+apply (wpsimp wp: set_object_wp)
+apply wpsimp
+apply clarsimp
+apply (clarsimp simp: authorised_arch_inv_def authorised_page_inv_def authorised_slots_def
+split: arch_invocation.splits page_invocation.splits
+)
+
+apply (subgoal_tac "vs_lookup_slot level asid vref s = Some (level, bc)")
+apply clarsimp
+
+apply (clarsimp simp: vs_lookup_slot_def
+obind_def
+ split: if_splits option.splits)
+
+apply (subgoal_tac "vs_lookup_table level asid vref s = Some (level, ba)")
+apply clarsimp
+apply (thin_tac "\<forall>levela\<le>max_pt_level. P levela" for P)
+
+apply (clarsimp simp: vs_lookup_table_def obind_def
+vspace_for_pool_def
+split: option.splits
+if_splits)
+apply auto
+apply (subgoal_tac "(\<lambda>p. pte_of p ((pts_of s)(ref := None))) = ptes_of s")
+apply clarsimp
+apply (rule all_ext)
+apply (clarsimp simp: pte_of_def obind_def pts_of_Some aobjs_of_Some
+get_tcb_def
+ split: option.splits)
+done
+
+
+end
+
 
 lemma set_thread_state_authorised[wp]:
   "\<lbrace>authorised_invocation aag i and (\<lambda>s. thread = cur_thread s) and valid_objs\<rbrace>
@@ -254,7 +308,22 @@ lemma guarded_to_cur_domain:
      \<Longrightarrow> pas_cur_domain aag s"
   by (auto simp: invs_def valid_state_def valid_idle_def pred_tcb_at_def
                  obj_at_def ct_in_state_def guarded_pas_domain_def)
+(*
+crunches reply_from_kernel
+  for pspace_aligned[wp]: pspace_aligned
+  and valid_vspace_objs[wp]: valid_vspace_objs
+  and valid_arch_state[wp]: valid_arch_state
+*)
 
+lemma sts_ct_in_state: "\<lbrace>\<lambda>s. t = cur_thread s \<and> P ts\<rbrace> set_thread_state t ts \<lbrace>\<lambda>rv. ct_in_state P\<rbrace>"
+unfolding ct_in_state_def
+apply (rule hoare_pre)
+apply wps
+apply (wpsimp wp: sts_st_tcb_at'')
+apply clarsimp
+done
+
+term ct_in_state
 lemma handle_invocation_pas_refined:
   "\<lbrace>pas_refined aag and guarded_pas_domain aag and domain_sep_inv (pasMaySendIrqs aag) st'
                     and einvs and ct_active and schact_is_rct and is_subject aag \<circ> cur_thread\<rbrace>
@@ -262,25 +331,51 @@ lemma handle_invocation_pas_refined:
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: handle_invocation_def split_def)
   apply (cases blocking, simp)
-  by (((wp syscall_valid without_preemption_wp
+
+  apply ((wp syscall_valid without_preemption_wp
            handle_fault_pas_refined set_thread_state_pas_refined
            set_thread_state_runnable_valid_sched
            perform_invocation_pas_refined
            hoare_vcg_conj_lift hoare_vcg_all_lift
+rfk_invs sts_st_tcb_at'' sts_ct_in_state
+| strengthen invs_psp_aligned invs_vspace_objs invs_arch_state
         | wpc
         | rule hoare_drop_imps
         | simp add: if_apply_def2 conj_comms split del: if_split
-               del: hoare_True_E_R)+),
-       ((wp lookup_extra_caps_auth lookup_extra_caps_authorised
+               del: hoare_True_E_R)+)
+apply ((wp lookup_extra_caps_auth lookup_extra_caps_authorised
             decode_invocation_authorised
             lookup_cap_and_slot_authorised
             lookup_cap_and_slot_cur_auth
             as_user_pas_refined
-            lookup_cap_and_slot_valid_fault3
-         | simp add: comp_def runnable_eq_active)+),
-       (auto intro: guarded_to_cur_domain
+            lookup_cap_and_slot_valid_fault3 hoare_vcg_const_imp_lift_R
+         | simp add: comp_def runnable_eq_active split del: if_split)+)
+apply (auto intro: guarded_to_cur_domain
               simp: ct_in_state_def st_tcb_at_def live_def
-             intro: if_live_then_nonz_capD)[1])+
+             intro: if_live_then_nonz_capD)
+
+  apply ((wp syscall_valid without_preemption_wp
+           handle_fault_pas_refined set_thread_state_pas_refined
+           set_thread_state_runnable_valid_sched
+           perform_invocation_pas_refined
+           hoare_vcg_conj_lift hoare_vcg_all_lift
+rfk_invs sts_st_tcb_at'' sts_ct_in_state
+| strengthen invs_psp_aligned invs_vspace_objs invs_arch_state
+        | wpc
+        | rule hoare_drop_imps
+        | simp add: if_apply_def2 conj_comms split del: if_split
+               del: hoare_True_E_R)+)
+apply ((wp lookup_extra_caps_auth lookup_extra_caps_authorised
+            decode_invocation_authorised
+            lookup_cap_and_slot_authorised
+            lookup_cap_and_slot_cur_auth
+            as_user_pas_refined
+            lookup_cap_and_slot_valid_fault3 hoare_vcg_const_imp_lift_R
+         | simp add: comp_def runnable_eq_active split del: if_split)+)
+apply (auto intro: guarded_to_cur_domain
+              simp: ct_in_state_def st_tcb_at_def live_def
+             intro: if_live_then_nonz_capD)
+done
 
 lemma handle_invocation_respects:
   "\<lbrace>integrity aag X st and pas_refined aag and guarded_pas_domain aag
@@ -362,6 +457,7 @@ lemma handle_recv_integrity:
       apply (fastforce simp: aag_cap_auth_def cap_auth_conferred_def
                              cap_rights_to_auth_def valid_fault_def)
      apply wpsimp+
+apply fastforce
   done
 
 lemma handle_reply_pas_refined[wp]:
@@ -551,7 +647,8 @@ interpretation handle_hypervisor_fault: Syscall_AC_wps "handle_hypervisor_fault 
   by simp
 
 lemma handle_interrupt_pas_refined:
-  "handle_interrupt irq \<lbrace>pas_refined aag\<rbrace>"
+  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
+    handle_interrupt irq \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: handle_interrupt_def)
   apply (rule conjI; rule impI;rule hoare_pre)
   apply (wp send_signal_pas_refined get_cap_wp
@@ -650,7 +747,7 @@ lemma handle_event_pas_refined:
              hoare_vcg_conj_lift hoare_vcg_all_lift
           | wpc
           | rule hoare_drop_imps
-          | strengthen invs_vobjs_strgs
+          | strengthen invs_vobjs_strgs invs_psp_aligned invs_vspace_objs invs_arch_state
           | simp)+
   done
 
@@ -716,7 +813,8 @@ lemma activate_thread_integrity:
   done
 
 lemma activate_thread_pas_refined:
-  "activate_thread \<lbrace>pas_refined aag\<rbrace>"
+  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
+   activate_thread \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   unfolding activate_thread_def get_thread_state_def thread_get_def
   apply (wpsimp wp: set_thread_state_pas_refined hoare_drop_imps)
   done
@@ -1168,9 +1266,11 @@ lemma call_kernel_pas_refined:
    call_kernel ev
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: call_kernel_def )
-  apply (wp activate_thread_pas_refined schedule_pas_refined handle_interrupt_pas_refined
-            do_machine_op_pas_refined dmo_wp alternative_wp select_wp)
-    apply (wpsimp wp: getActiveIRQ_inv)
+  apply (wpsimp wp: activate_thread_pas_refined schedule_pas_refined handle_interrupt_pas_refined
+            do_machine_op_pas_refined dmo_wp alternative_wp select_wp hoare_drop_imps getActiveIRQ_inv
+simp: crunch_simps
+| strengthen invs_psp_aligned invs_vspace_objs invs_arch_state
+)+
    apply (wp he_invs handle_event_pas_refined)
   apply auto
   done
