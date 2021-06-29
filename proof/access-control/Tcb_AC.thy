@@ -352,19 +352,11 @@ lemma invoke_tcb_ntfn_control_pas_refined[wp]:
    apply (wp | fastforce simp: authorised_tcb_inv_def)+
   done
 
-(* FIXME AC: crunch hates extended ops *)
-lemma suspend_pspace_aligned[wp]: "suspend p \<lbrace>pspace_aligned\<rbrace>"
-  unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
-lemma suspend_valid_vspace_objs[wp]: "suspend p \<lbrace>valid_vspace_objs\<rbrace>"
-  unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
-lemma suspend_valid_arch_state[wp]: "suspend p \<lbrace>valid_arch_state\<rbrace>"
-  unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
-lemma restart_pspace_aligned[wp]: "restart p \<lbrace>pspace_aligned\<rbrace>"
-  unfolding restart_def by (wpsimp wp: dxo_wp_weak)
-lemma restart_valid_vspace_objs[wp]: "restart p \<lbrace>valid_vspace_objs\<rbrace>"
-  unfolding restart_def by (wpsimp wp: dxo_wp_weak)
-lemma restart_valid_arch_state[wp]: "restart p \<lbrace>valid_arch_state\<rbrace>"
-  unfolding restart_def by (wpsimp wp: dxo_wp_weak)
+crunches suspend, restart
+  for pspace_aligned[wp]: pspace_aligned
+  and valid_vspace_objs[wp]: valid_vspace_objs
+  and valid_arch_state[wp]: valid_arch_state
+  (ignore: tcb_sched_action reschedule_required empty_slot_ext possible_switch_to wp: dxo_wp_weak)
 
 
 context Tcb_AC_1 begin
