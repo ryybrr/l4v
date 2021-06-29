@@ -1372,9 +1372,10 @@ lemma set_simple_ko_pas_refined[wp]:
   apply simp
   done
 
-lemma thread_set_st_vrefs[wp]:
+lemma thread_set_state_vrefs:
   "\<lbrace>pspace_aligned and valid_vspace_objs and valid_arch_state and (\<lambda>s. P (state_vrefs s))\<rbrace>
-   thread_set f t \<lbrace>\<lambda>_ s :: det_ext state. P (state_vrefs s)\<rbrace>"
+   thread_set f t
+   \<lbrace>\<lambda>_ s :: det_ext state. P (state_vrefs s)\<rbrace>"
   apply (simp add: thread_set_def)
   apply (wpsimp wp: set_object_wp)
   apply (clarsimp simp: state_vrefs_tcb_upd obj_at_def is_obj_defs
@@ -1413,7 +1414,8 @@ lemma thread_set_pas_refined_triv:
       and ntfn: "\<And>tcb. tcb_bound_notification (f tcb) = tcb_bound_notification tcb"
      shows "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
             thread_set f t \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
-  by (wpsimp wp: tcb_domain_map_wellformed_lift simp: pas_refined_def state_objs_to_policy_def
+  by (wpsimp wp: tcb_domain_map_wellformed_lift thread_set_state_vrefs
+           simp: pas_refined_def state_objs_to_policy_def
       | wps thread_set_caps_of_state_trivial[OF cps]
             thread_set_thread_states_trivT[OF st]
             thread_set_thread_bound_ntfns_trivT[OF ntfn])+

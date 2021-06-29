@@ -12,52 +12,12 @@ context Arch begin global_naming ARM_A
 
 named_theorems Ipc_AC_assms
 
-
 lemma make_fault_message_inv[Ipc_AC_assms, wp]:
-  "\<lbrace>P\<rbrace> make_fault_msg ft t \<lbrace>\<lambda>rv. P\<rbrace>"
+  "make_fault_msg ft t \<lbrace>P\<rbrace>"
   apply (cases ft, simp_all split del: if_split)
-     apply (wp as_user_inv getRestartPC_inv mapM_wp' make_arch_fault_msg_inv
-              | simp add: getRegister_def)+
-  done
+  by (wp as_user_inv getRestartPC_inv mapM_wp' make_arch_fault_msg_inv | simp add: getRegister_def)+
 
 declare handle_arch_fault_reply_typ_at[Ipc_AC_assms]
-
-(*
-crunches deleted_irq_handler, possible_switch_to, blocked_cancel_ipc, empty_slot
-  for state_vrefs[Ipc_AC_assms, wp]: "\<lambda>s. P (state_vrefs (s :: det_ext state))"
-  (wp: crunch_wps hoare_unless_wp select_wp dxo_wp_weak simp: crunch_simps)
-
-lemma cancel_all_ipc_state_vrefs[wp]:
-  "\<lbrace>(\<lambda>s. P (state_vrefs (s :: det_ext state))) and
-pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
- cancel_all_ipc epptr
-\<lbrace>\<lambda>_ s. P (state_vrefs (s :: det_ext state))\<rbrace>"
-unfolding cancel_all_ipc_def
-apply (rule_tac Q="\<lambda>_. (\<lambda>s. P (state_vrefs (s :: det_ext state))) and
-pspace_aligned and valid_vspace_objs and valid_arch_state"
-in hoare_strengthen_post[rotated], clarsimp)
-by (wpsimp wp: mapM_x_inv_wp get_simple_ko_wp)
-
-lemma cancel_all_signals_state_vrefs[wp]:
-  "\<lbrace>(\<lambda>s. P (state_vrefs (s :: det_ext state))) and
-pspace_aligned and valid_vspace_objs and valid_arch_state\<rbrace>
- cancel_all_signals ntfn
-\<lbrace>\<lambda>_ s. P (state_vrefs (s :: det_ext state))\<rbrace>"
-unfolding cancel_all_signals_def
-apply (rule_tac Q="\<lambda>_. (\<lambda>s. P (state_vrefs (s :: det_ext state))) and
-pspace_aligned and valid_vspace_objs and valid_arch_state"
-in hoare_strengthen_post[rotated], clarsimp)
-by (wpsimp wp: mapM_x_inv_wp get_simple_ko_wp)
-
-crunches deleted_irq_handler, send_signal
-  for state_vrefs[Ipc_AC_assms, wp]: "\<lambda>s. P (state_vrefs (s :: det_ext state))"
-  (wp: crunch_wps hoare_unless_wp select_wp dxo_wp_weak simp: crunch_simps)
-
-
-crunches deleted_irq_handler, send_signal
-  for arch_state[Ipc_AC_assms, wp]: "\<lambda>s. P (arch_state (s :: det_ext state))"
-  (wp: crunch_wps hoare_unless_wp select_wp dxo_wp_weak simp: crunch_simps)
-*)
 
 crunch integrity_asids[Ipc_AC_assms, wp]: cap_insert_ext "integrity_asids aag subjects x st"
 
@@ -75,8 +35,7 @@ lemma lookup_ipc_buffer_has_auth[Ipc_AC_assms, wp]:
    \<lbrace>\<lambda>rv _. ipc_buffer_has_auth aag receiver rv\<rbrace>"
   apply (rule hoare_pre)
    apply (simp add: lookup_ipc_buffer_def)
-   apply (wp get_cap_wp thread_get_wp'
-        | wpc)+
+   apply (wp get_cap_wp thread_get_wp' | wpc)+
   apply (clarsimp simp: cte_wp_at_caps_of_state ipc_buffer_has_auth_def get_tcb_ko_at[symmetric])
   apply (frule caps_of_state_tcb_cap_cases [where idx="tcb_cnode_index 4"])
    apply (simp add: dom_tcb_cap_cases)
@@ -119,20 +78,6 @@ qed
 
 context Arch begin global_naming ARM_A
 
-lemma dumb_helper:
-  "\<lbrakk>0 \<le> i; i \<le> 7\<rbrakk> \<Longrightarrow> of_int i < (8 :: obj_ref)"
-apply (prop_tac "i < 8")
-apply clarsimp
-apply (thin_tac P for P) back
-apply (induct i; clarsimp)
-apply (clarsimp simp: word_of_nat)
-apply (prop_tac "(8 :: obj_ref) = word_of_int 8")
-apply (simp)
-apply (simp only:)
-apply (subst wi_less)
-apply clarsimp
-done
-
 lemma store_word_offs_respects_in_ipc[Ipc_AC_assms]:
   "\<lbrace>integrity_tcb_in_ipc aag X receiver epptr TRContext st and
     K ((\<not> is_subject aag receiver \<longrightarrow> auth_ipc_buffers st receiver = ptr_range buf msg_align_bits)
@@ -140,34 +85,16 @@ lemma store_word_offs_respects_in_ipc[Ipc_AC_assms]:
    store_word_offs buf r v
    \<lbrace>\<lambda>_. integrity_tcb_in_ipc aag X receiver epptr TRContext st\<rbrace>"
   apply (simp add: store_word_offs_def storeWord_def pred_conj_def)
-  apply (rule hoare_pre)
-   apply (wp dmo_wp)
-  apply (unfold integrity_tcb_in_ipc_def)
-  apply (elim conjE)
-  apply (intro impI conjI)
-     apply assumption+
-   apply (erule integrity_trans)
-   apply (clarsimp simp: integrity_def is_aligned_mask[symmetric])
-apply (prop_tac "is_aligned buf msg_align_bits")
-apply clarsimp
-apply (prop_tac "\<forall>i \<in> set [0..7]. buf + of_nat r * of_nat word_size + of_int i \<in> ptr_range buf msg_align_bits")
-apply (clarsimp simp: ptr_range_off_off_mems)
-apply (rule ptr_range_off_off_mems)
-apply clarsimp
-apply clarsimp
-apply (clarsimp simp: word_size_def)
-apply (simp add: dumb_helper)
-apply clarsimp
-apply (prop_tac "fold
-                   (\<lambda>i m. m
-                       (buf + of_nat r * of_nat word_size + of_int i :=
-                          word_rsplit v ! (7 - nat i)))
-                   [0..7] (underlying_memory (machine_state s)) x = underlying_memory (machine_state s) x")
-   apply (simp add: word_rsplit_0 upto.simps atLeastAtMost_upto)
-apply auto[1]
-apply simp
-apply simp
-done
+  apply (wp dmo_wp)
+  apply (clarsimp simp: integrity_tcb_in_ipc_def)
+  apply (erule integrity_trans)
+  apply (clarsimp simp: integrity_def)
+  apply (subgoal_tac "\<forall>i \<in> set [0..7].
+                      buf + of_nat r * of_nat word_size + of_int i \<in> ptr_range buf msg_align_bits")
+   apply (fastforce simp: word_rsplit_0 upto.simps atLeastAtMost_upto)
+  apply (fastforce simp add: unat_def word_size_def of_nat_nat[symmetric] word_of_nat_less
+                   simp del: of_nat_nat intro: ptr_range_off_off_mems)
+  done
 
 crunches set_extra_badge
   for respects_in_ipc[Ipc_AC_assms, wp]: "integrity_tcb_in_ipc aag X receiver epptr TRContext st"
@@ -207,7 +134,7 @@ lemma lookup_ipc_buffer_ptr_range_in_ipc[Ipc_AC_assms]:
                                                    ptr_range buf' msg_align_bits)\<rbrace>"
   unfolding lookup_ipc_buffer_def
   apply (rule hoare_pre)
-  apply (wp get_cap_wp thread_get_wp' | wpc)+
+   apply (wp get_cap_wp thread_get_wp' | wpc)+
   apply (clarsimp simp: cte_wp_at_caps_of_state ipc_buffer_has_auth_def get_tcb_ko_at [symmetric])
   apply (frule caps_of_state_tcb_cap_cases [where idx = "tcb_cnode_index 4"])
    apply (simp add: dom_tcb_cap_cases)
@@ -232,10 +159,10 @@ lemma lookup_ipc_buffer_aligned[Ipc_AC_assms]:
   apply (frule (1) caps_of_state_valid_cap)
   apply (clarsimp simp: valid_cap_simps cap_aligned_def)
   apply (erule aligned_add_aligned)
-    apply (rule is_aligned_andI1)
-    apply (drule (1) valid_tcb_objs)
-    apply (clarsimp simp: valid_obj_def valid_tcb_def valid_ipc_buffer_cap_def
-                   split: if_splits)
+   apply (rule is_aligned_andI1)
+   apply (drule (1) valid_tcb_objs)
+   apply (clarsimp simp: valid_obj_def valid_tcb_def valid_ipc_buffer_cap_def
+                  split: if_splits)
   apply (rule order_trans [OF _ pbfs_atleast_pageBits])
   apply (simp add: msg_align_bits pageBits_def)
   done
@@ -260,6 +187,11 @@ lemma auth_ipc_buffers_machine_state_update[Ipc_AC_assms, simp]:
 lemma handle_arch_fault_reply_integrity_tcb_in_fault_reply_TRFContext[Ipc_AC_assms, wp]:
   "handle_arch_fault_reply vmf thread x y \<lbrace>integrity_tcb_in_fault_reply aag X thread TRFContext st\<rbrace>"
   by (wp handle_arch_fault_reply_typ_at)
+
+crunches handle_arch_fault_reply
+  for pspace_aligned[Ipc_AC_assms, wp]: "\<lambda>s :: det_ext state. pspace_aligned s"
+  and valid_vspace_objs[Ipc_AC_assms, wp]: "\<lambda>s :: det_ext state. valid_vspace_objs s"
+  and valid_arch_state[Ipc_AC_assms, wp]: "\<lambda>s :: det_ext state. valid_arch_state s"
 
 end
 

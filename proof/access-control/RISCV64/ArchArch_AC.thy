@@ -3015,6 +3015,7 @@ requalify_consts
 
 end
 
+declare authorised_arch_inv_sa_update[simp]
 declare set_thread_state_authorised_arch_inv[wp]
 
 end
