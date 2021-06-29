@@ -21,8 +21,8 @@ definition arch_authorised_irq_ctl_inv ::
        (pasSubject aag, Control, pasIRQAbs aag irq) \<in> pasPolicy aag"
 
 lemma arch_invoke_irq_control_pas_refined[Interrupt_AC_assms]:
-  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state and
-valid_mdb and arch_irq_control_inv_valid irq_ctl_inv
+  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state
+                    and valid_mdb and arch_irq_control_inv_valid irq_ctl_inv
                     and K (arch_authorised_irq_ctl_inv aag irq_ctl_inv)\<rbrace>
    arch_invoke_irq_control irq_ctl_inv
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
@@ -49,7 +49,7 @@ lemma arch_invoke_irq_control_respects[Interrupt_AC_assms]:
   done
 
 lemma integrity_irq_masks [iff]:
-  "integrity aag X st (s\<lparr>machine_state := machine_state s \<lparr>irq_masks := v \<rparr>\<rparr>) =
+  "integrity aag X st (s\<lparr>machine_state := machine_state s \<lparr>irq_masks := v\<rparr>\<rparr>) =
    integrity aag X st s"
   unfolding integrity_def by simp
 
@@ -88,7 +88,7 @@ lemma arch_decode_irq_control_invocation_authorised[Interrupt_AC_assms]:
   apply (rule hoare_pre)
    apply (simp add: Let_def split del: if_split cong: if_cong)
    apply (wp whenE_throwError_wp hoare_vcg_imp_lift hoare_drop_imps
-          | strengthen  aag_Control_owns_strg
+          | strengthen aag_Control_owns_strg
           | simp add: o_def del: hoare_True_E_R)+
   apply (cases args, simp_all)
   apply (cases caps, simp_all)
