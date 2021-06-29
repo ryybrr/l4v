@@ -40,7 +40,7 @@ lemma invoke_tcb_tc_respects_aag[Tcb_AC_assms]:
    apply (simp only: split_def)
   apply (((simp add: conj_comms del: hoare_True_E_R,
           strengthen imp_consequent[where Q="x = None" for x], simp cong: conj_cong)
-| strengthen invs_psp_aligned invs_vspace_objs invs_arch_state
+         | strengthen invs_psp_aligned invs_vspace_objs invs_arch_state
          | rule wp_split_const_if wp_split_const_if_R hoare_vcg_all_lift_R
                 hoare_vcg_E_elim hoare_vcg_const_imp_lift_R hoare_vcg_R_conj
          | wp restart_integrity_autarch set_mcpriority_integrity_autarch
@@ -69,7 +69,7 @@ lemma invoke_tcb_tc_respects_aag[Tcb_AC_assms]:
               check_cap_inv[where P="valid_arch_state"]
               check_cap_inv[where P="valid_vspace_objs"]
               check_cap_inv[where P="pspace_aligned"]
-thread_set_not_state_valid_sched
+              thread_set_not_state_valid_sched
               thread_set_cte_at
               thread_set_cte_wp_at_trivial[where Q="\<lambda>x. x", OF ball_tcb_cap_casesI]
               thread_set_no_cap_to_trivial[OF ball_tcb_cap_casesI]
@@ -93,10 +93,10 @@ thread_set_not_state_valid_sched
                         clas_no_asid cli_no_irqs
                         emptyable_def
          | rule conjI | erule pas_refined_refl)+
-apply (case_tac aa; clarsimp)
-apply (case_tac m; clarsimp)
-apply (case_tac aa; clarsimp)
-apply (case_tac m; clarsimp)
+   apply (thin_tac "case_option _ _ _")+
+   apply (fastforce split: cap.split_asm option.split_asm)
+  apply (thin_tac "case_option _ _ _")+
+  apply (fastforce split: cap.split_asm option.split_asm)
   done
 
 end

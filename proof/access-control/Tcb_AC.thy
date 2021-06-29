@@ -93,7 +93,8 @@ lemma cdt_NullCap:
   by (rule ccontr) (force dest: mdb_cte_atD simp: valid_mdb_def2)
 
 lemma setup_reply_master_pas_refined:
-  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state and valid_mdb and K (is_subject aag t)\<rbrace>
+  "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state
+                    and valid_mdb and K (is_subject aag t)\<rbrace>
    setup_reply_master t
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (simp add: setup_reply_master_def)
@@ -106,7 +107,6 @@ crunches possible_switch_to
 crunches setup_reply_master
   for pspace_aligned[wp]: pspace_aligned
 
-
 lemma restart_pas_refined:
   "\<lbrace>pas_refined aag and invs and tcb_at t and K (is_subject aag t)\<rbrace>
    restart t
@@ -114,8 +114,7 @@ lemma restart_pas_refined:
   apply (simp add: restart_def get_thread_state_def)
   apply (wp set_thread_state_pas_refined setup_reply_master_pas_refined thread_get_wp'
          | strengthen invs_mdb
-         | simp)+
-  apply fastforce
+         | fastforce)+
   done
 
 lemma option_update_thread_set_safe_lift:
@@ -172,12 +171,12 @@ lemma (in is_extended') cte_wp_at[wp]: "I (cte_wp_at P a)"
 
 lemma checked_insert_pas_refined:
   "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state and valid_mdb and
-    K(\<not> is_master_reply_cap new_cap \<and> is_subject aag target \<and>
-      is_subject aag (fst src_slot) \<and> pas_cap_cur_auth aag new_cap)\<rbrace>
+    K (\<not> is_master_reply_cap new_cap \<and> is_subject aag target \<and>
+         is_subject aag (fst src_slot) \<and> pas_cap_cur_auth aag new_cap)\<rbrace>
    check_cap_at new_cap src_slot
      (check_cap_at (ThreadCap target) slot
         (cap_insert new_cap src_slot (target, ref)))
-   \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
+   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (unfold check_cap_at_def)
   apply (wp cap_insert_pas_refined_same_object_as get_cap_wp)
   by (fastforce simp: cte_wp_at_caps_of_state)
@@ -250,7 +249,6 @@ lemma sbn_bind_respects:
   apply (erule integrity_trans)
   apply (clarsimp simp: integrity_def obj_at_def pred_tcb_at_def)
   done
-
 
 lemma bind_notification_respects:
   "\<lbrace>integrity aag X st and pas_refined aag and bound_tcb_at ((=) None) t
@@ -337,7 +335,7 @@ lemma hoare_st_refl:
 
 lemma bind_notification_pas_refined[wp]:
   "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state and
-     K (\<forall>auth \<in> {Receive, Reset}. abs_has_auth_to aag auth t ntfn)\<rbrace>
+    K (\<forall>auth \<in> {Receive, Reset}. abs_has_auth_to aag auth t ntfn)\<rbrace>
    bind_notification t ntfn
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (clarsimp simp: bind_notification_def)
@@ -351,22 +349,23 @@ lemma invoke_tcb_ntfn_control_pas_refined[wp]:
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
   apply (case_tac ntfn, simp_all del: K_def)
    apply (safe intro!: hoare_gen_asm)
-   apply (wp | simp add: authorised_tcb_inv_def | fastforce)+
+   apply (wp | fastforce simp: authorised_tcb_inv_def)+
   done
 
+(* FIXME AC: crunch hates extended ops *)
 lemma suspend_pspace_aligned[wp]: "suspend p \<lbrace>pspace_aligned\<rbrace>"
   unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
 lemma suspend_valid_vspace_objs[wp]: "suspend p \<lbrace>valid_vspace_objs\<rbrace>"
   unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
 lemma suspend_valid_arch_state[wp]: "suspend p \<lbrace>valid_arch_state\<rbrace>"
   unfolding suspend_def by (wpsimp wp: dxo_wp_weak)
-
 lemma restart_pspace_aligned[wp]: "restart p \<lbrace>pspace_aligned\<rbrace>"
   unfolding restart_def by (wpsimp wp: dxo_wp_weak)
 lemma restart_valid_vspace_objs[wp]: "restart p \<lbrace>valid_vspace_objs\<rbrace>"
   unfolding restart_def by (wpsimp wp: dxo_wp_weak)
 lemma restart_valid_arch_state[wp]: "restart p \<lbrace>valid_arch_state\<rbrace>"
   unfolding restart_def by (wpsimp wp: dxo_wp_weak)
+
 
 context Tcb_AC_1 begin
 
@@ -386,7 +385,10 @@ lemma invoke_tcb_pas_refined:
   apply (rule hoare_gen_asm)
   apply (cases ti, simp_all add: authorised_tcb_inv_def)
         apply (wp ita_wps hoare_drop_imps
-                  hoare_strengthen_post[where Q="\<lambda>_. pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state", OF mapM_x_wp']
+                  hoare_strengthen_post[where Q="\<lambda>_. pas_refined aag and pspace_aligned
+                                                                     and valid_vspace_objs
+                                                                     and valid_arch_state",
+                                        OF mapM_x_wp']
               | simp add: emptyable_def if_apply_def2 authorised_tcb_inv_def
               | rule ball_tcb_cap_casesI
               | wpc
