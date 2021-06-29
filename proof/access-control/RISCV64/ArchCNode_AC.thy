@@ -10,7 +10,7 @@ begin
 
 section\<open>Arch-specific CNode AC.\<close>
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 declare arch_post_modify_registers_def[simp]
 declare arch_post_cap_deletion_def[simp]
@@ -175,7 +175,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma integrity_asids_set_cap_Nullcap[CNode_AC_assms]:
   "\<lbrace>(=) s\<rbrace> set_cap NullCap slot \<lbrace>\<lambda>_. integrity_asids aag subjects x s\<rbrace>"
@@ -202,7 +202,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma arch_post_cap_deletion_pas_refined[CNode_AC_assms, wp]:
   "arch_post_cap_deletion irqopt \<lbrace>pas_refined aag\<rbrace>"
@@ -237,7 +237,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma arch_derive_cap_auth_derived[CNode_AC_assms]:
   "\<lbrace>\<lambda>s. cte_wp_at (auth_derived (ArchObjectCap cap)) src_slot s\<rbrace>
@@ -345,7 +345,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma pas_refined_arch_state_update_not_asids[simp]:
  "riscv_asid_table (f (arch_state s)) = riscv_asid_table (arch_state s)

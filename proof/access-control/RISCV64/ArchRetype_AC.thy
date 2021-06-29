@@ -146,7 +146,7 @@ lemma vs_lookup_table:
 
 end
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Retype_AC_assms
 
@@ -362,6 +362,6 @@ qed
 
 
 requalify_facts
-  ARM_A.storeWord_respects
+  RISCV64.storeWord_respects
 
 end

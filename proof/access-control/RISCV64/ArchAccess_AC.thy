@@ -10,7 +10,7 @@ begin
 
 section\<open>Arch-specific AC proofs\<close>
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Access_AC_assms
 
@@ -98,7 +98,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma auth_ipc_buffers_tro[Access_AC_assms]:
   "\<lbrakk> integrity_obj_state aag activate subjects s s';
@@ -133,7 +133,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma ipcframe_subset_page:
   "\<lbrakk> valid_objs s; get_tcb p s = Some tcb;
@@ -200,7 +200,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma pas_refined_irq_state_independent[intro!, simp]:
   "pas_refined x (s\<lparr>machine_state := machine_state s\<lparr>irq_state := f (irq_state (machine_state s))\<rparr>\<rparr>) =

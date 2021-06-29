@@ -8,7 +8,7 @@ theory ArchTcb_AC
 imports Tcb_AC
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Tcb_AC_assms
 

@@ -8,7 +8,7 @@ theory ArchAccess
 imports Types
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 subsection \<open>Arch-specific transformation of caps into authorities\<close>
 
@@ -52,7 +52,7 @@ definition state_vrefs where
 
 end
 
-context Arch_p_arch_update_eq begin global_naming ARM_A
+context Arch_p_arch_update_eq begin global_naming RISCV64
 
  interpretation Arch .
 
@@ -61,7 +61,7 @@ lemma state_vrefs[iff]: "state_vrefs (f s) = state_vrefs s"
 
 end
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemmas state_vrefs_upd =
   cur_thread_update.state_vrefs
@@ -75,7 +75,7 @@ lemmas state_vrefs_upd =
 end
 
 requalify_facts
-  ARM_A.state_vrefs_upd
+  RISCV64.state_vrefs_upd
 
 declare state_vrefs_upd[simp]
 

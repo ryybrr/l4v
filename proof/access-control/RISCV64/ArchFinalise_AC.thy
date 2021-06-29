@@ -8,7 +8,7 @@ theory ArchFinalise_AC
 imports Finalise_AC
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Finalise_AC_assms
 
@@ -420,7 +420,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma cap_revoke_respects'[Finalise_AC_assms]:
   "s \<turnstile> \<lbrace>(\<lambda>s. trp \<longrightarrow> integrity aag X st s) and K (is_subject aag (fst slot))

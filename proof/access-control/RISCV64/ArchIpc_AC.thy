@@ -8,7 +8,7 @@ theory ArchIpc_AC
 imports Ipc_AC
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Ipc_AC_assms
 
@@ -76,7 +76,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma store_word_offs_respects_in_ipc[Ipc_AC_assms]:
   "\<lbrace>integrity_tcb_in_ipc aag X receiver epptr TRContext st and

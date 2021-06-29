@@ -8,7 +8,7 @@ theory ArchSyscall_AC
 imports Syscall_AC
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Syscall_AC_assms
 

@@ -9,7 +9,7 @@ imports
   "DomainSepInv"
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems DomainSepInv_assms
 
@@ -35,7 +35,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 crunches
   handle_reserved_irq, handle_vm_fault, perform_pg_inv_map, perform_pg_inv_unmap,

@@ -9,7 +9,7 @@ imports
   Interrupt_AC
 begin
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 named_theorems Interrupt_AC_assms
 
@@ -63,7 +63,7 @@ crunches arch_check_irq for inv[Interrupt_AC_assms, wp]: P
 
 end
 
-requalify_consts ARM_A.arch_authorised_irq_ctl_inv
+requalify_consts RISCV64.arch_authorised_irq_ctl_inv
 
 
 global_interpretation Interrupt_AC_1?: Interrupt_AC_1 "arch_authorised_irq_ctl_inv"
@@ -74,7 +74,7 @@ proof goal_cases
 qed
 
 
-context Arch begin global_naming ARM_A
+context Arch begin global_naming RISCV64
 
 lemma arch_decode_irq_control_invocation_authorised[Interrupt_AC_assms]:
   "\<lbrace>pas_refined aag and
