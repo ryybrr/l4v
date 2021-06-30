@@ -1133,10 +1133,11 @@ lemma mapM_x_store_pte_caps_of_state[wp]:
   by (wpsimp wp: mapM_x_wp')
 
 lemma state_bits_to_policy_vrefs_subseteq:
-"x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) (thread_bound_ntfns s) (cdt s) X
+"x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) tbn (cdt s) X
+\<Longrightarrow> tbn = tbn'
 \<Longrightarrow> \<forall>x. X x \<subseteq> state_vrefs s x
 \<Longrightarrow>
- x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) (thread_bound_ntfns s) (cdt s) (state_vrefs s)"
+ x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) tbn' (cdt s) (state_vrefs s)"
 apply (case_tac x; clarsimp)
 apply (erule state_bits_to_policy.cases)
 apply (fastforce intro: state_bits_to_policy.intros)+
@@ -1662,68 +1663,73 @@ apply (clarsimp simp: pas_refined_def)
 apply (wpsimp wp: store_pte_state_objs_in_policy store_pte_state_asids_to_policy)
 done
 
+
+(* FIXME ryanb: move *)
+lemma unmap_page_table_pas_refined:
+ "\<lbrace>pas_refined aag and invs and K (vaddr \<in> user_region)\<rbrace>
+  unmap_page_table asid vaddr pt
+  \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
+  unfolding unmap_page_table_def
+  apply (rule hoare_gen_asm)
+  apply (wpsimp wp: set_cap_pas_refined get_cap_wp pt_lookup_from_level_wrp store_pte_invs_unmap
+                    store_pte_pas_refined hoare_vcg_imp_lift' hoare_vcg_ball_lift hoare_vcg_all_lift)
+  apply (rule_tac x=asid in exI)
+  apply clarsimp
+  apply (case_tac "level = asid_pool_level")
+   apply (fastforce dest: vs_lookup_slot_no_asid)
+  apply (subst (asm) vs_lookup_slot_table_unfold; clarsimp)
+  apply (intro conjI)
+    apply (frule vs_lookup_table_pt_at; clarsimp?)
+    apply (drule vs_lookup_table_valid_cap; clarsimp?)
+    apply (fastforce simp: valid_cap_def valid_arch_cap_def valid_arch_cap_ref_def obj_at_def
+                     dest: caps_of_state_valid split: cap.splits arch_cap.splits)
+   apply (metis vs_lookup_table_vspace user_region_slots is_aligned_neg_mask2 pt_slot_offset_offset)
+  apply (clarsimp simp: reachable_page_table_not_global)
+  done
+
+crunches unmap_page_table
+  for cdt[wp]: "\<lambda>s. P (cdt s)"
+
 lemma perform_pt_inv_unmap_pas_refined:
  "\<lbrace>pas_refined aag and invs and valid_pti (PageTableUnmap cap ct_slot)
                             and K (authorised_page_table_inv aag (PageTableUnmap cap ct_slot))\<rbrace>
   perform_pt_inv_unmap cap ct_slot
   \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
-  unfolding perform_pt_inv_unmap_def unmap_page_table_def
-  apply (rule hoare_gen_asm)
+  unfolding perform_pt_inv_unmap_def
   apply (wpsimp wp: set_cap_pas_refined get_cap_wp)
        apply (strengthen invs_psp_aligned invs_vspace_objs invs_arch_state)
        apply wps
        apply (rule hoare_vcg_all_lift[OF hoare_vcg_imp_lift'[OF mapM_x_wp_inv]], wpsimp wp: mapM_x_wp_inv)
        apply (rule hoare_vcg_conj_lift[OF hoare_strengthen_post[OF mapM_x_swp_store_pte_pas_refined]], assumption)
        apply (rule hoare_vcg_conj_lift[OF hoare_strengthen_post[OF mapM_x_swp_store_pte_invs_unmap]], assumption)
-       apply (wpsimp wp: mapM_x_wp_inv)
-      apply (wpsimp wp: pt_lookup_from_level_wrp  store_pte_invs_unmap store_pte_pas_refined
-                        static_imp_wp hoare_vcg_imp_lift' hoare_vcg_ball_lift hoare_vcg_all_lift)+
-  apply (clarsimp simp: conj_ac)
+       apply (wpsimp wp: pt_lookup_from_level_wrp store_pte_invs_unmap store_pte_pas_refined
+                         mapM_x_wp_inv unmap_page_table_pas_refined
+                         hoare_vcg_imp_lift' hoare_vcg_ball_lift hoare_vcg_all_lift)+
   apply (rule conjI)
    apply (fastforce simp: is_PageTableCap_def authorised_page_table_inv_def
                           valid_pti_def update_map_data_def cte_wp_at_caps_of_state)
-  apply clarsimp
-  apply (case_tac "cte_wp_at ((=) x) ct_slot s"; clarsimp)
-  apply (clarsimp simp: is_PageTableCap_def authorised_page_table_inv_def valid_pti_def
-                        valid_arch_cap_def cte_wp_at_caps_of_state update_map_data_def
-                        aag_cap_auth_def cap_auth_conferred_def arch_cap_auth_conferred_def
+  apply (clarsimp simp: is_PageTableCap_def authorised_page_table_inv_def valid_arch_cap_def
+                        valid_pti_def cte_wp_at_caps_of_state update_map_data_def aag_cap_auth_def
+                        cap_auth_conferred_def arch_cap_auth_conferred_def wellformed_mapdata_def
                         cap_links_asid_slot_def cap_links_irq_def is_transferable.simps)
-  apply (prop_tac "\<forall>sl \<in> set [acap_obj cap, acap_obj cap + 2 ^ pte_bits .e. acap_obj cap + 2 ^ pt_bits - 1].
-                   table_base sl = acap_obj cap \<and> acap_obj cap \<notin> global_refs s \<and>
-                   (\<forall>asid. vspace_for_asid asid s \<noteq> Some (acap_obj cap))")
-   apply clarsimp
-   apply (intro context_conjI)
-     apply (drule (1) caps_of_state_aligned_page_table)
-     apply (simp only: is_aligned_neg_mask_eq')
-     apply (clarsimp simp: add_mask_fold)
-     apply (drule subsetD[OF upto_enum_step_subset], clarsimp)
-     apply (drule neg_mask_mono_le[where n=pt_bits])
-     apply (drule neg_mask_mono_le[where n=pt_bits])
-     apply (fastforce dest: FIXME_wordAND_wordNOT_mask_plus)
-    apply (fastforce simp: cte_wp_at_caps_of_state cap_range_def
-                     dest: invs_valid_global_refs valid_global_refsD)
-   apply clarsimp
-   apply (frule vspace_for_asid_target)
-   apply (drule valid_vs_lookupD; clarsimp)
-   apply (drule (1) unique_table_refsD[rotated]; clarsimp)
-   apply (drule (1) cap_to_pt_is_pt_cap)
-     apply (clarsimp simp: in_omonad obj_at_def)
-    apply (fastforce intro: valid_objs_caps)
-   apply (clarsimp simp: is_cap_simps)
-  apply clarsimp
-  apply (rule_tac x=a in exI, clarsimp)
-  apply (case_tac "level = asid_pool_level")
-   apply (fastforce dest: vs_lookup_slot_no_asid)
-  apply (clarsimp simp: valid_arch_cap_def wellformed_mapdata_def)
-  apply (subst (asm) vs_lookup_slot_table_unfold; clarsimp)
-  apply (intro conjI)
-    apply (fastforce dest: reachable_page_table_not_global)
-   apply (case_tac ct_slot; clarsimp)
-   apply (frule vs_lookup_table_pt_at; clarsimp?)
-   apply (drule vs_lookup_table_valid_cap; clarsimp?)
-   apply (fastforce simp: valid_cap_def valid_arch_cap_def valid_arch_cap_ref_def obj_at_def
-                    dest: caps_of_state_valid split: cap.splits arch_cap.splits)
-  apply (metis AND_twice is_aligned_neg_mask_eq' table_index_max_level_slots vs_lookup_table_vspace)
+  apply (prop_tac "table_base x = acap_obj cap")
+   apply (drule (1) caps_of_state_aligned_page_table)
+   apply (simp only: is_aligned_neg_mask_eq')
+   apply (clarsimp simp: add_mask_fold)
+   apply (drule subsetD[OF upto_enum_step_subset], clarsimp)
+   apply (drule neg_mask_mono_le[where n=pt_bits])
+   apply (drule neg_mask_mono_le[where n=pt_bits])
+   apply (fastforce dest: FIXME_wordAND_wordNOT_mask_plus)
+  apply (rule conjI; clarsimp)
+   apply (fastforce simp: cte_wp_at_caps_of_state cap_range_def
+                    dest: invs_valid_global_refs valid_global_refsD)
+  apply (frule vspace_for_asid_target)
+  apply (drule valid_vs_lookupD; clarsimp)
+  apply (drule (1) unique_table_refsD[rotated]; clarsimp)
+  apply (drule (1) cap_to_pt_is_pt_cap)
+    apply (clarsimp simp: in_omonad obj_at_def)
+   apply (fastforce intro: valid_objs_caps)
+  apply (clarsimp simp: is_cap_simps)
   done
 
 

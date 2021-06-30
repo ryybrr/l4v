@@ -153,7 +153,7 @@ named_theorems Retype_AC_assms
 declare retype_region_proofs'.pas_refined[Retype_AC_assms]
 
 
-lemma state_vrefs_detype[Retype_AC_assms,simp]:
+lemma state_vrefs_detype[Retype_AC_assms, dest]:
   "x \<in> state_vrefs (detype R s) p \<Longrightarrow> x \<in> state_vrefs s p"
   apply (clarsimp simp: state_vrefs_def)
   apply (frule vs_lookup_level)
