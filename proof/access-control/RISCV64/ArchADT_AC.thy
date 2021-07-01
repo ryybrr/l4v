@@ -52,11 +52,6 @@ lemma ptr_offset_in_ptr_range:
   apply (clarsimp simp: is_aligned_no_overflow')
   done
 
-lemma vs_lookup_table_vref_independent:
-  "\<lbrakk> vs_lookup_table level asid vref s = opt; level \<ge> max_pt_level \<rbrakk>
-     \<Longrightarrow> vs_lookup_table level asid vref' s = opt"
-  by (cases "level = asid_pool_level"; clarsimp simp: vs_lookup_table_def)
-
 lemma user_op_access[ADT_AC_assms]:
   "\<lbrakk> invs s; pas_refined aag s; is_subject aag tcb; ptable_lift tcb s x = Some ptr;
      auth \<in> vspace_cap_rights_to_auth (ptable_rights tcb s x) \<rbrakk>

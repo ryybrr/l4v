@@ -1133,25 +1133,20 @@ lemma mapM_x_store_pte_caps_of_state[wp]:
   by (wpsimp wp: mapM_x_wp')
 
 lemma state_bits_to_policy_vrefs_subseteq:
-"x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) tbn (cdt s) X
-\<Longrightarrow> tbn = tbn'
-\<Longrightarrow> \<forall>x. X x \<subseteq> state_vrefs s x
-\<Longrightarrow>
- x \<in> state_bits_to_policy (caps_of_state s) (thread_states s) tbn' (cdt s) (state_vrefs s)"
-apply (case_tac x; clarsimp)
-apply (erule state_bits_to_policy.cases)
-apply (fastforce intro: state_bits_to_policy.intros)+
-done
+  "\<And>cdt. \<lbrakk> x \<in> state_bits_to_policy caps ts tbn cdt vrefs; caps = caps';
+           ts = ts'; tbn = tbn'; cdt = cdt'; \<forall>x. vrefs x \<subseteq> state_vrefs s x \<rbrakk>
+           \<Longrightarrow> x \<in> state_bits_to_policy caps'  ts' tbn' cdt' (state_vrefs s)"
+  apply (cases x; clarsimp)
+  apply (erule state_bits_to_policy.cases; fastforce intro: state_bits_to_policy.intros)
+  done
 
 lemma state_asids_to_policy_vrefs_subseteq:
-"x \<in> state_asids_to_policy_aux aag (caps_of_state s) (asid_table s) X
-\<Longrightarrow> \<forall>x. X x \<subseteq> state_vrefs s x
-\<Longrightarrow>
- x \<in> state_asids_to_policy_aux aag (caps_of_state s) (asid_table s) (state_vrefs s)"
-apply (case_tac x; clarsimp)
-apply (erule state_asids_to_policy_aux.cases)
-apply (fastforce intro: state_asids_to_policy_aux.intros)+
-done
+  "\<lbrakk> x \<in> state_asids_to_policy_aux aag caps asid_tab vrefs; caps = caps';
+     \<forall>x. vrefs x \<subseteq> state_vrefs s x; \<forall>x y. asid_tab x = Some y \<longrightarrow> asid_table s x = Some y \<rbrakk>
+     \<Longrightarrow> x \<in> state_asids_to_policy_aux aag caps' (asid_table s) (state_vrefs s)"
+  apply (cases x; clarsimp)
+  apply (erule state_asids_to_policy_aux.cases; fastforce intro: state_asids_to_policy_aux.intros)
+  done
 
 
 lemma store_pte_state_objs_in_policy:
@@ -1179,6 +1174,11 @@ and (\<lambda>s. (\<exists>slot ref. caps_of_state s slot = Some (ArchObjectCap 
    apply (clarsimp simp: auth_graph_map_def)
    apply (rule exI, rule conjI, rule refl)+
    apply (erule state_bits_to_policy_vrefs_subseteq)
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
+
    apply clarsimp
    apply (clarsimp simp: state_vrefs_def)
    apply (rule exI)
@@ -1207,6 +1207,10 @@ and (\<lambda>s. (\<exists>slot ref. caps_of_state s slot = Some (ArchObjectCap 
   apply (clarsimp simp: auth_graph_map_def)
   apply (rule exI, rule conjI, rule refl)+
   apply (erule state_bits_to_policy_vrefs_subseteq)
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
   apply clarsimp
   apply (clarsimp simp: state_vrefs_def)
   apply (rule exI)
@@ -1374,6 +1378,10 @@ apply (erule subsetD)
 apply (clarsimp simp: auth_graph_map_def)
 apply (rule exI, rule conjI, rule refl)+
 apply (erule state_bits_to_policy_vrefs_subseteq)
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
 apply clarsimp
 apply (clarsimp simp: state_vrefs_def)
 apply (rule exI)
@@ -1402,6 +1410,10 @@ apply (erule subsetD)
 apply (clarsimp simp: auth_graph_map_def)
 apply (rule exI, rule conjI, rule refl)+
 apply (erule state_bits_to_policy_vrefs_subseteq)
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
+       apply clarsimp
 apply clarsimp
 apply (clarsimp simp: state_vrefs_def)
 apply (rule exI)
@@ -1457,6 +1469,7 @@ apply clarsimp
 apply (erule subsetD)
 apply (erule state_asids_to_policy_vrefs_subseteq)
 apply clarsimp
+apply clarsimp
 apply (clarsimp simp: state_vrefs_def)
 apply (rule exI)
 apply (rule conjI)
@@ -1479,9 +1492,13 @@ apply (clarsimp split: if_splits)
 apply (clarsimp simp: pte_ref2_def)
 apply fastforce
 
+apply clarsimp
+
 apply (clarsimp)
 apply (erule subsetD)
 apply (erule state_asids_to_policy_vrefs_subseteq)
+apply clarsimp
+
 apply clarsimp
 apply (clarsimp simp: state_vrefs_def)
 apply (rule exI)
@@ -1507,6 +1524,8 @@ graph_of_def)
 apply (clarsimp split: if_splits)
 apply (clarsimp simp: pte_ref2_def)
 apply fastforce
+
+apply clarsimp
 done
 
 
@@ -1558,6 +1577,7 @@ graph_of_def)
 apply (clarsimp split: if_splits)
 apply (clarsimp simp: pte_ref2_def)
 apply fastforce
+apply clarsimp
 
 apply (clarsimp)
 apply (erule subsetD)
@@ -1588,6 +1608,7 @@ apply (clarsimp split: if_splits)
 apply (clarsimp simp: pte_ref2_def)
 apply fastforce
 
+apply clarsimp
 apply clarsimp
 apply clarsimp
 done
