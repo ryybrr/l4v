@@ -53,40 +53,6 @@ lemma integrity_asids_update_autarch[Access_AC_assms]:
      \<Longrightarrow> integrity_asids aag subjects x st (s\<lparr>kheap := kheap s(ptr \<mapsto> obj)\<rparr>)"
   by simp
 
-(*
-lemma vs_lookup_table_tcb_upd:
-   "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_asid_table s; tcb_at t s \<rbrakk>
-      \<Longrightarrow> vs_lookup_table bt asid vref (s\<lparr>kheap := kheap s(t \<mapsto> TCB tcb)\<rparr>) =
-           vs_lookup_table bt asid vref s"
-  apply (rule vs_lookup_table_eqI)
-  apply (auto simp: tcb_at_def get_tcb_def opt_map_def
-             split: option.splits kernel_object.splits)
-  done
-
-(* FIXME ryanb: better name than bot *)
-lemma state_vrefs_tcb_upd:
-  "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_asid_table s; kheap s t = Some (TCB tcb') \<rbrakk>
-     \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(t \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
-  apply (rule ext)
-  sorry
-
-lemma "tcb_at t s \<Longrightarrow>
-       vs_lookup_table btm asid vref (s\<lparr>kheap := kheap s(t \<mapsto> TCB tcb)\<rparr>) =
-       vs_lookup_table btm asid vref s"
-apply (rule vs_lookup_table_unreachable_upd_idem)
-apply (clarsimp simp: vs_lookup_table_def)
-
-lemma as_user_state_vrefs[Access_AC_assms, wp]:
-  "\<lbrace>pspace_aligned and valid_vspace_objs and valid_asid_table and (\<lambda>s. P (state_vrefs s))\<rbrace>
-   as_user t f
-   \<lbrace>\<lambda>_ s. P (state_vrefs s)\<rbrace>"
-  apply (simp add: as_user_def)
-  apply (wpsimp wp: set_object_wp)
-  apply (subst state_vrefs_tcb_upd)
-      apply (auto simp: obj_at_def get_tcb_def split: option.splits kernel_object.splits)
-  done
-*)
-
 end
 
 
