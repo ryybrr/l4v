@@ -62,6 +62,13 @@ locale Finalise_AC_1 =
                                   and K (pas_cap_cur_auth aag (ArchObjectCap acap))\<rbrace>
      arch_finalise_cap acap final
      \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
+  and arch_post_cap_deletion[wp]:
+    "arch_post_cap_deletion acap \<lbrace>\<lambda>s :: det_ext state. pspace_aligned s\<rbrace>"
+  and arch_post_cap_deletion_valid_vspace_objs[wp]:
+    "arch_post_cap_deletion acap \<lbrace>\<lambda>s :: det_ext state. valid_vspace_objs s\<rbrace>"
+  and arch_post_cap_deletion_valid_arch_state[wp]:
+    "arch_post_cap_deletion acap \<lbrace>\<lambda>s :: det_ext state. valid_arch_state s\<rbrace>"
+
 
 
 context Finalise_AC_1 begin
@@ -335,7 +342,6 @@ lemma reply_cap_descends_from_master0:
                         tcb_cap_cases_def is_cap_simps)
   done
 
-
 context Finalise_AC_1 begin
 
 lemma reply_cancel_ipc_pas_refined[wp]:
@@ -362,12 +368,10 @@ lemma deleting_irq_handler_pas_refined[wp]:
   done
 
 crunches suspend
-  for pspace_aligned[wp]: pspace_aligned
-  and valid_vspace_objs[wp]: valid_vspace_objs
-  and valid_arch_state[wp]: valid_arch_state
-  (ignore: empty_slot_ext tcb_sched_action
-       wp: dxo_wp_weak select_wp hoare_drop_imps
-     simp: crunch_simps)
+  for pspace_aligned[wp]: "\<lambda>s :: det_ext state. pspace_aligned s"
+  and valid_vspace_objs[wp]: "\<lambda>s :: det_ext state. valid_vspace_objs s"
+  and valid_arch_state[wp]: "\<lambda>s :: det_ext state. valid_arch_state s"
+  (wp: dxo_wp_weak select_wp hoare_drop_imps simp: crunch_simps)
 
 crunch pas_refined[wp]: suspend "pas_refined aag"
 

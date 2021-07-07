@@ -56,38 +56,23 @@ lemma sata_update2[CNode_AC_assms]:
                  simp: cap_links_asid_slot_def label_owns_asid_slot_def
                 split: if_split_asm)
 
-(* FIXME ryanb *)
 lemma state_vrefs_eqI:
   "\<lbrakk> \<forall>bot_level asid vref level p.
-     bot_level < level \<longrightarrow>
-     vs_lookup_table level asid vref s = Some (level, p) \<longrightarrow>
-     (if level \<le> max_pt_level then pts_of s' p = pts_of s p else asid_pools_of s' p = asid_pools_of s p);
-     aobjs_of s' = aobjs_of s; asid_table s'  = asid_table s; pspace_aligned s; valid_vspace_objs s; valid_asid_table s\<rbrakk>
+       bot_level < level \<and> vs_lookup_table level asid vref s = Some (level, p)
+       \<longrightarrow> (if level \<le> max_pt_level
+            then pts_of s' p = pts_of s p
+            else asid_pools_of s' p = asid_pools_of s p);
+     aobjs_of s' = aobjs_of s; asid_table s' = asid_table s;
+     pspace_aligned s; valid_vspace_objs s; valid_asid_table s \<rbrakk>
      \<Longrightarrow> state_vrefs (s' :: 'a :: state_ext state) = state_vrefs (s :: 'a :: state_ext state)"
   apply (rule ext)
-  apply (simp (no_asm) add: state_vrefs_def)
-  apply auto
-   apply (rule exI, rule conjI[rotated], assumption)
-   apply (rule exI, rule exI, rule conjI, rule refl)
-   apply (rule_tac x=bot in exI)
-   apply (rule_tac x=asid in exI)
-   apply (rule_tac x=vref in exI)
-   apply clarsimp
-   apply (rule subst[OF vs_lookup_table_eqI,rotated -1])
-        apply assumption
-       apply fastforce
-      apply simp+
-  apply (rule exI, rule conjI[rotated], assumption)
-  apply (rule exI, rule exI, rule conjI, rule refl)
-  apply (rule_tac x=bot in exI)
-  apply (rule_tac x=asid in exI)
-  apply (rule_tac x=vref in exI)
-  apply clarsimp
-  apply (subst vs_lookup_table_eqI)
-       prefer 6
-       apply assumption
-      apply fastforce
-     apply simp+
+  apply safe
+   apply (subst (asm) state_vrefs_def, clarsimp)
+   apply (fastforce intro: state_vrefsD elim: subst[OF vs_lookup_table_eqI,rotated -1])
+  apply (subst (asm) state_vrefs_def, clarsimp)
+  apply (rule state_vrefsD)
+     apply (subst vs_lookup_table_eqI; fastforce)
+    apply fastforce+
   done
 
 lemma set_cap_state_vrefs[CNode_AC_assms, wp]:
@@ -114,14 +99,12 @@ crunches prepare_thread_delete, arch_finalise_cap
   for cur_domain[CNode_AC_assms, wp]:"\<lambda>s. P (cur_domain s)"
   (wp: crunch_wps select_wp hoare_vcg_if_lift2 simp: unless_def)
 
-(* FIXME ryanb *)
 lemma state_vrefs_tcb_upd[CNode_AC_assms]:
   "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s; tcb_at t s \<rbrakk>
      \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(t \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
   apply (rule state_vrefs_eqI)
   by (fastforce simp: opt_map_def obj_at_def is_obj_defs valid_arch_state_def)+
 
-(* FIXME ryanb *)
 lemma state_vrefs_simple_type_upd[CNode_AC_assms]:
   "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s;
      ko_at ko ptr s; is_simple_type ko; a_type ko = a_type (f val) \<rbrakk>
@@ -211,6 +194,9 @@ lemma arch_post_cap_deletion_pas_refined[CNode_AC_assms, wp]:
 lemma aobj_ref'_same_aobject[CNode_AC_assms]:
   "same_aobject_as ao' ao \<Longrightarrow> aobj_ref' ao = aobj_ref' ao'"
   by (cases ao; clarsimp split: arch_cap.splits)
+
+crunches set_untyped_cap_as_full
+  for valid_arch_state[CNode_AC_assms, wp]: valid_arch_state
 
 end
 

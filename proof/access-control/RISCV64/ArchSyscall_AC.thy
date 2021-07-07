@@ -54,11 +54,6 @@ lemma cancel_badged_sends_cur_thread[Syscall_AC_assms, wp]:
   unfolding cancel_badged_sends_def
   by (wpsimp wp: dxo_wp_weak filterM_preserved crunch_wps)
 
-(* FIXME ryanb *)
-lemma state_vrefs_cur_thread_update[Syscall_AC_assms, simp]:
-  "state_vrefs (cur_thread_update f s) = state_vrefs s"
-  by (simp add: state_vrefs_def)
-
 crunches arch_mask_irq_signal, handle_reserved_irq
   for pas_refined[Syscall_AC_assms, wp]: "pas_refined aag"
 

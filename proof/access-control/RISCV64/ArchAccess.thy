@@ -50,6 +50,12 @@ definition state_vrefs where
      \<Union>{vs_refs_aux lvl ao | lvl ao bot asid vref. vs_lookup_table bot asid vref s = Some (lvl, p)
                                                    \<and> aobjs_of s p = Some ao \<and> vref \<in> user_region}"
 
+lemma state_vrefsD:
+  "\<lbrakk> vs_lookup_table level asid vref s = Some (lvl, p);
+     aobjs_of s p = Some ao; vref \<in> user_region; x \<in> vs_refs_aux lvl ao \<rbrakk>
+     \<Longrightarrow> x \<in> state_vrefs s p"
+  unfolding state_vrefs_def by fastforce
+
 end
 
 context Arch_p_arch_update_eq begin global_naming RISCV64
@@ -203,7 +209,7 @@ lemma integrity_asids_interrupt_states_update_r[simp]:
    integrity_asids aag subjects x st s"
   by simp
 
-(* FIXME ryanb - is there a locale which could better handle this? *)
+(* FIXME AC - locale? *)
 lemmas integrity_asids_updates =
   integrity_asids_trans_state_l
   integrity_asids_trans_state_r
@@ -221,7 +227,6 @@ lemmas integrity_asids_updates =
   integrity_asids_interrupt_states_update_r
 
 
-(* FIXME ryanb *)
 subsection \<open>Misc definitions\<close>
 
 fun ctxt_IP_update where

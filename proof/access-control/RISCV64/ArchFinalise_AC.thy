@@ -187,6 +187,11 @@ lemma arch_finalise_cap_respects[wp]:
              intro: pas_refined_Control_into_is_subject_asid)
   done
 
+crunches arch_post_cap_deletion
+  for pspace_aligned[Finalise_AC_assms, wp]: "\<lambda>s :: det_ext state. pspace_aligned s"
+  and valid_vspace_objs[Finalise_AC_assms, wp]: "\<lambda>s :: det_ext state. valid_vspace_objs s"
+  and valid_arch_state[Finalise_AC_assms, wp]: "\<lambda>s :: det_ext state. valid_arch_state s"
+
 end
 
 

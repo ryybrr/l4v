@@ -353,10 +353,10 @@ lemma invoke_tcb_ntfn_control_pas_refined[wp]:
   done
 
 crunches suspend, restart
-  for pspace_aligned[wp]: pspace_aligned
-  and valid_vspace_objs[wp]: valid_vspace_objs
-  and valid_arch_state[wp]: valid_arch_state
-  (ignore: tcb_sched_action reschedule_required empty_slot_ext possible_switch_to wp: dxo_wp_weak)
+  for pspace_aligned[wp]: "\<lambda>s :: det_ext state. pspace_aligned s"
+  and valid_vspace_objs[wp]: "\<lambda>s :: det_ext state. valid_vspace_objs s"
+  and valid_arch_state[wp]: "\<lambda>s :: det_ext state. valid_arch_state s"
+  (wp: dxo_wp_weak)
 
 
 context Tcb_AC_1 begin

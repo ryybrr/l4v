@@ -30,20 +30,13 @@ locale CNode_AC_1 =
        cap_links_asid_slot aag (pasObjectAbs aag (fst ptr')) cap';
        state_asids_to_policy_arch aag caps (as :: arch_state) vrefs \<subseteq> pasPolicy aag \<rbrakk>
        \<Longrightarrow> state_asids_to_policy_arch aag (caps(ptr \<mapsto> cap, ptr' \<mapsto> cap')) as vrefs \<subseteq> pasPolicy aag"
-and state_vrefs_tcb_upd:
-  "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s; tcb_at tptr s \<rbrakk>
-     \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(tptr \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
-and state_vrefs_simple_type_upd:
-  "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s;
-     ko_at ko p s; is_simple_type ko; a_type ko = a_type (f (val :: 'b)) \<rbrakk>
-     \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(p \<mapsto> f val)\<rparr>) = state_vrefs s"
-(*
   and state_vrefs_tcb_upd:
-    "get_tcb tptr s = Some y \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(tptr \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
+    "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s; tcb_at tptr s \<rbrakk>
+       \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(tptr \<mapsto> TCB tcb)\<rparr>) = state_vrefs s"
   and state_vrefs_simple_type_upd:
-    "\<lbrakk> ko_at ko p s; is_simple_type ko; a_type ko = a_type (f (val :: 'b)) \<rbrakk>
+    "\<lbrakk> pspace_aligned s; valid_vspace_objs s; valid_arch_state s;
+       ko_at ko p s; is_simple_type ko; a_type ko = a_type (f (val :: 'b)) \<rbrakk>
        \<Longrightarrow> state_vrefs (s\<lparr>kheap := kheap s(p \<mapsto> f val)\<rparr>) = state_vrefs s"
-*)
   and a_type_arch_object_not_tcb[simp]:
     "a_type (ArchObj arch_kernel_obj) \<noteq> ATCB"
   and set_cap_state_vrefs:
@@ -1032,14 +1025,9 @@ locale CNode_AC_3 = CNode_AC_2 +
     "arch_post_cap_deletion irqopt \<lbrace>pas_refined aag\<rbrace>"
   and aobj_ref'_same_aobject:
     "same_aobject_as ao' ao \<Longrightarrow> aobj_ref' ao = aobj_ref' ao'"
+  and set_untyped_cap_as_full_valid_arch_state[wp]:
+    "set_untyped_cap_as_full src_cap new_cap src_slot \<lbrace>\<lambda>s :: det_ext state. valid_arch_state s\<rbrace>"
 
-
-context begin interpretation Arch . (* FIXME ryanb *)
-
-crunches set_untyped_cap_as_full
-  for valid_arch_state[wp]: valid_arch_state
-
-end
 
 context CNode_AC_3 begin
 
@@ -1118,16 +1106,10 @@ lemma cap_move_pas_refined[wp]:
                 dest: invs_mdb pas_refined_mem[OF sta_cdt]
                       pas_refined_mem[OF sta_cdt_transferable])
 
-crunches set_original
-  for pspace_aligned[wp]: pspace_aligned
-
-context begin interpretation Arch .
-
 crunches set_original, set_cdt
-  for valid_vspace_objs[wp]: valid_vspace_objs
+  for pspace_aligned[wp]: pspace_aligned
+  and valid_vspace_objs[wp]: valid_vspace_objs
   and valid_arch_state[wp]: valid_arch_state
-
-end
 
 lemma empty_slot_pas_refined[wp, wp_not_transferable]:
   "\<lbrace>pas_refined aag and pspace_aligned and valid_vspace_objs and valid_arch_state

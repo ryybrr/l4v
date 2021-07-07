@@ -196,7 +196,7 @@ crunches handle_arch_fault_reply
 end
 
 
-context is_extended begin interpretation Arch . (*FIXME: arch_split*)
+context is_extended begin interpretation Arch .
 
 lemma list_integ_lift_in_ipc[Ipc_AC_assms]:
   assumes li:

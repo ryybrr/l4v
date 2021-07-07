@@ -222,7 +222,12 @@ locale Retype_AC_1 =
                          and K (\<forall>ref \<in> set refs. is_aligned ref (obj_bits_api new_type obj_sz))\<rbrace>
      init_arch_objects new_type ptr num_objects obj_sz refs
      \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
-
+  and init_arch_objects_pspace_aligned[wp]:
+    "init_arch_objects new_type ptr num_objects obj_sz refs \<lbrace>\<lambda>s :: det_ext state. pspace_aligned s\<rbrace>"
+  and init_arch_objects_valid_vspace_objs[wp]:
+    "init_arch_objects new_type ptr num_objects obj_sz refs \<lbrace>\<lambda>s :: det_ext state. valid_vspace_objs s\<rbrace>"
+  and init_arch_objects_valid_arch_state[wp]:
+    "init_arch_objects new_type ptr num_objects obj_sz refs \<lbrace>\<lambda>s :: det_ext state. valid_arch_state s\<rbrace>"
 
 context Retype_AC_1 begin
 
@@ -234,13 +239,12 @@ lemma detype_integrity:
   apply (clarsimp simp: detype_def detype_ext_def integrity_def)
   done
 
-(* FIXME ryanb *)
 lemma sta_detype:
   "state_objs_to_policy (detype R s) \<subseteq> state_objs_to_policy s"
   apply (clarsimp simp add: state_objs_to_policy_def state_refs_of_detype)
   apply (erule state_bits_to_policy.induct)
-  apply (auto intro: state_bits_to_policy.intros split: if_split_asm)
-  using sta_vref state_objs_to_policy_def state_vrefs_detype apply blast
+        apply (auto intro: state_bits_to_policy.intros dest: state_vrefs_detype
+                     simp: state_objs_to_policy_def split: if_splits)
   done
 
 lemma pas_refined_detype:
@@ -249,17 +253,16 @@ lemma pas_refined_detype:
   apply (blast intro!: sta_detype sata_detype sita_detype interrupt_irq_node_detype dtsa_detype)+
   done
 
-(* FIXME ryanb *)
 lemma delete_objects_respects[wp]:
-  "\<lbrace>integrity aag X st and K (is_aligned ptr bits \<and> bits < word_bits \<and> word_size_bits \<le> bits \<and>
-                              (\<forall>p\<in>ptr_range ptr bits. is_subject aag p))\<rbrace>
+  "\<lbrace>\<lambda>s. integrity aag X st s \<and> is_aligned ptr bits \<and> bits < word_bits \<and>
+        word_size_bits \<le> bits \<and> (\<forall>p\<in>ptr_range ptr bits. is_subject aag p)\<rbrace>
    delete_objects ptr bits
    \<lbrace>\<lambda>_. integrity aag X st\<rbrace>"
-   apply (simp add: delete_objects_def)
-   apply (rule_tac seq_ext)
+  apply (simp add: delete_objects_def)
+  apply (rule_tac seq_ext)
    apply (rule hoare_triv[of P _ "%_. P" for P])
    apply (wp dmo_freeMemory_respects | simp)+
-   by (fastforce simp: ptr_range_def intro!: detype_integrity)
+  by (fastforce simp: ptr_range_def intro!: detype_integrity)
 
 lemma integrity_work_units_completed_update[simp]:
   "integrity aag X st (work_units_completed_update f s) = integrity aag X st s"
@@ -271,6 +274,7 @@ lemma integrity_irq_state_independent[intro!, simp]:
    integrity x y z s"
   by (simp add: integrity_def)
 
+(* FIXME AC: shouldn't use word-dependent definitions in a generic context *)
 lemma reset_untyped_cap_integrity:
   "\<lbrace>integrity aag X st and pas_refined aag and valid_objs
                        and cte_wp_at is_untyped_cap slot
@@ -291,7 +295,7 @@ lemma reset_untyped_cap_integrity:
                 set_cap_integrity_autarch dmo_clearMemory_respects' | simp)+
      apply (clarsimp simp: cap_aligned_def is_cap_simps bits_of_def)
      apply (subst aligned_add_aligned, assumption, rule is_aligned_shiftl, simp+)
-     apply (simp add: word_size_bits_def reset_chunk_bits_def) (* FIXME ryanb: locale? *)
+     apply (simp add: word_size_bits_def reset_chunk_bits_def)
      apply (clarsimp simp: arg_cong2[where f="(\<le>)", OF refl reset_chunk_bits_def])
      apply (drule bspec, erule subsetD[rotated])
       apply (simp only: ptr_range_def, rule new_range_subset',
@@ -914,7 +918,6 @@ lemma delete_objects_pas_refined:
   apply simp
   done
 
-
 lemma delete_objects_pspace_aligned[wp]:
   "delete_objects ptr sz \<lbrace>pspace_aligned\<rbrace>"
   unfolding delete_objects_def do_machine_op_def
@@ -926,22 +929,10 @@ lemma delete_objects_pspace_aligned[wp]:
 lemma reset_untyped_cap_pspace_aligned[wp]:
   "reset_untyped_cap slot \<lbrace>pspace_aligned\<rbrace>"
   apply (clarsimp simp: reset_untyped_cap_def)
-apply (wpsimp wp: mapME_x_inv_wp )
-apply (rule valid_validE)
-apply (wpsimp wp: preemption_point_inv dxo_wp_weak hoare_drop_imps)+
-done
-
-context begin interpretation Arch .
-
-crunches init_arch_objects
-  for valid_vspace_objs[wp]: valid_vspace_objs
-
-requalify_facts
-  init_arch_objects_pspace_aligned
-  init_arch_objects_valid_arch_state
-
-declare init_arch_objects_pspace_aligned[wp]
-declare init_arch_objects_valid_arch_state[wp]
+  apply (wpsimp wp: mapME_x_inv_wp )
+       apply (rule valid_validE)
+       apply (wpsimp wp: preemption_point_inv dxo_wp_weak hoare_drop_imps)+
+  done
 
 lemma valid_vspace_objs_detype:
   assumes "invs s"
@@ -981,7 +972,6 @@ lemma reset_untyped_cap_valid_vspace_objs:
     apply (fastforce simp: bits_of_def is_cap_simps)+
   done
 
-(* FIXME ryanb: boilerplating *)
 lemma valid_arch_state_detype:
   assumes "invs s"
   assumes "cte_wp_at (\<lambda>c. is_untyped_cap c \<and> descendants_range c ptr s
@@ -1020,25 +1010,20 @@ lemma reset_untyped_cap_valid_arch_state:
     apply (fastforce simp: bits_of_def is_cap_simps)+
   done
 
-end
-
 lemma reset_untyped_cap_pas_refined[wp]:
   "\<lbrace>pas_refined aag and invs and
                     (\<lambda>s. cte_wp_at (\<lambda>c. is_untyped_cap c \<and> descendants_range c slot s) slot s)
                     and K (is_subject aag (fst slot))\<rbrace>
    reset_untyped_cap slot
    \<lbrace>\<lambda>_. pas_refined aag\<rbrace>"
-
   apply (rule hoare_gen_asm)
   apply (clarsimp simp: reset_untyped_cap_def)
   apply (rule hoare_pre)
    apply (wps | wp set_cap_pas_refined_not_transferable | simp add: unless_def)+
      apply (rule valid_validE)
      apply (rule_tac P="is_untyped_cap cap \<and> pas_cap_cur_auth aag cap" in hoare_gen_asm)
-     apply (rule_tac Q="\<lambda>_.cte_wp_at (\<lambda> c. \<not> is_transferable (Some c)) slot and pas_refined aag
-and pspace_aligned and
-            valid_vspace_objs and
-            valid_arch_state"
+     apply (rule_tac Q="\<lambda>_. cte_wp_at (\<lambda> c. \<not> is_transferable (Some c)) slot and pas_refined aag and
+                            pspace_aligned and valid_vspace_objs and valid_arch_state"
                   in hoare_strengthen_post)
       apply (rule validE_valid, rule mapME_x_inv_wp)
       apply (rule hoare_pre)
@@ -1047,11 +1032,9 @@ and pspace_aligned and
              | simp)+
       apply (fastforce simp: is_cap_simps aag_cap_auth_UntypedCap_idx_dev bits_of_def)
      apply blast
-    apply (wps
-           | wp hoare_vcg_const_imp_lift get_cap_wp delete_objects_pas_refined hoare_drop_imp
-delete_objects_valid_vspace_objs
-delete_objects_valid_arch_state
-           | simp)+
+    apply (wps | wp hoare_vcg_const_imp_lift get_cap_wp delete_objects_pas_refined hoare_drop_imp
+                    delete_objects_valid_vspace_objs delete_objects_valid_arch_state
+               | simp)+
   apply (clarsimp simp: cte_wp_at_caps_of_state is_cap_simps bits_of_def)
   apply (frule cte_map_not_null_outside'[rotated])
        apply (fastforce simp: cte_wp_at_caps_of_state)+
@@ -1106,7 +1089,7 @@ lemma invoke_untyped_pas_refined:
        apply (erule caps_region_kernel_window_imp)
         apply clarsimp
        apply clarsimp
-  using word_and_le2 apply blast
+       apply (fastforce simp: word_and_le2)
       apply (fastforce simp: cte_wp_at_caps_of_state)
      apply (rule hoare_pre, wp set_cap_pas_refined)
      apply (clarsimp simp: cte_wp_at_caps_of_state is_cap_simps)

@@ -272,20 +272,18 @@ lemma nonzero_data_to_nat_simp[Retype_AC_assms]:
   "0 < data_to_nat x \<Longrightarrow> 0 < x"
   by (auto dest: word_of_nat_less)
 
-(* FIXME ryanb: should probably use word_size_bits *)
 lemma storeWord_integrity_autarch:
   "\<lbrace>\<lambda>ms. integrity aag X st (s\<lparr>machine_state := ms\<rparr>) \<and>
-         (is_aligned p 3 \<longrightarrow> (\<forall>p' \<in> ptr_range p 3. is_subject aag p'))\<rbrace>
+         (is_aligned p word_size_bits \<longrightarrow> (\<forall>p' \<in> ptr_range p word_size_bits. is_subject aag p'))\<rbrace>
    storeWord p v
    \<lbrace>\<lambda>_ ms. integrity aag X st (s\<lparr>machine_state := ms\<rparr>)\<rbrace>"
   unfolding storeWord_def
   apply wp
-  apply (auto simp: upto.simps integrity_def is_aligned_mask [symmetric]
+  apply (auto simp: upto.simps integrity_def is_aligned_mask [symmetric] word_size_bits_def
             intro!: trm_lrefl ptr_range_memI ptr_range_add_memI)
   done
 
 (* TODO: proof has mainly been copied from dmo_clearMemory_respects *)
-(* FIXME ryanb: should not expose the 3 *)
 lemma dmo_freeMemory_respects[Retype_AC_assms]:
   "\<lbrace>integrity aag X st and K (is_aligned ptr bits \<and> bits < word_bits \<and> word_size_bits \<le> bits \<and>
                               (\<forall>p \<in> ptr_range ptr bits. is_subject aag p))\<rbrace>
@@ -323,7 +321,6 @@ lemma storeWord_respects:
             intro!: trm_write ptr_range_memI ptr_range_add_memI)
   done
 
-(* FIXME ryanb: should not expose the number *)
 lemma dmo_clearMemory_respects'[Retype_AC_assms]:
   "\<lbrace>integrity aag X st and
     K (is_aligned ptr bits \<and> bits < word_bits \<and> word_size_bits \<le> bits \<and>

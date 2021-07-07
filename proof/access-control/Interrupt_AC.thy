@@ -49,10 +49,6 @@ lemma pas_refined_is_subject_irqD:
   "\<lbrakk> is_subject_irq aag irq; pas_refined aag s \<rbrakk> \<Longrightarrow> is_subject aag (interrupt_irq_node s irq)"
   by (simp add:pas_refined_def irq_map_wellformed_aux_def)
 
-crunches set_irq_state
-  for valid_vspace_objs[wp]: valid_vspace_objs
-  and valid_arch_state[wp]: valid_arch_state
-
 context Interrupt_AC_1 begin
 
 definition authorised_irq_ctl_inv :: "'a PAS \<Rightarrow> Invocations_A.irq_control_invocation \<Rightarrow> bool" where

@@ -105,10 +105,9 @@ lemma perform_invocation_respects:
 
 declare AllowSend_def[simp] AllowRecv_def[simp]
 
-(* FIXME AC: breaks for RISCV unless "real_cte_at slot" is assumed. This term appears in the RISCV
-             variant of arch_decode_inv_wf, but not in the ARM variant. We should avoid requalifying
-             it and instead have a wp rule for valid_arch_inv as part of a locale. *)
-(* FIXME ryanb - arch invocation definition shouldn't be used *)
+(* FIXME AC: the RISCV variant of arch_decode_inv_wf assumes "real_cte_at slot" whereas the
+             ARM variant does not. Just going to assume "real_cte_at slot" here for now even
+             though it's redundant for ARM. *)
 lemma decode_invocation_authorised:
   "\<lbrace>pas_refined aag and valid_cap cap and invs and ct_active and (is_subject aag \<circ> cur_thread) and
     cte_wp_at ((=) cap) slot and ex_cte_cap_to slot and domain_sep_inv (pasMaySendIrqs aag) st' and
@@ -160,10 +159,8 @@ lemma decode_invocation_authorised:
      apply (simp only: domain_sep_inv_def)
     apply (rule impI, erule subst, rule pas_refined_sita_mem [OF sita_controlled],
            auto simp: cte_wp_at_caps_of_state)[1]
-
    apply (clarsimp simp add: cap_links_irq_def )
    apply (drule (1) pas_refined_Control, simp)
-
   apply (clarsimp simp: cap_links_asid_slot_def label_owns_asid_slot_def)
   apply (fastforce dest!: pas_refined_Control)
   done

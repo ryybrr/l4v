@@ -18,14 +18,6 @@ context Arch begin global_naming RISCV64
 
 named_theorems Arch_AC_assms
 
-
-(* FIXME ryanb: find better location *)
-lemma state_vrefsD:
-  "\<lbrakk> vs_lookup_table level asid vref s = Some (lvl, p);
-     aobjs_of s p = Some ao; vref \<in> user_region; x \<in> vs_refs_aux lvl ao \<rbrakk>
-     \<Longrightarrow> x \<in> state_vrefs s p"
-  unfolding state_vrefs_def by fastforce
-
 lemma pool_for_asid_vs_lookupD:
   "pool_for_asid asid s = Some p \<Longrightarrow>
    vs_lookup_table asid_pool_level asid vref s = Some (asid_pool_level, p)"
@@ -120,8 +112,9 @@ lemma graph_of_comp:
   "\<lbrakk> g x = y; f y = Some z \<rbrakk> \<Longrightarrow> (x,z) \<in> graph_of (f \<circ> g)"
   by (auto simp: graph_of_def)
 
-(* FIXME ryanb: move *)
-lemma rev_bexI_minus: "x \<in> A \<Longrightarrow> x \<notin> B \<Longrightarrow> P x \<Longrightarrow> \<exists>x\<in>A-B. P x"
+(* FIXME AC: move *)
+lemma rev_bexI_minus:
+  "\<lbrakk> x \<in> A; x \<notin> B; P x \<rbrakk> \<Longrightarrow> \<exists>x\<in>A-B. P x"
   unfolding Bex_def by blast
 
 lemma pt_walk_is_subject:
@@ -579,8 +572,7 @@ lemma pas_refined_asid_control_helper:
   apply (fastforce dest: sata_asidpool)
   done
 
-(* FIXME ryanb: include with retype_region_invs_extras *)
-thm retype_region_invs_extras
+(* FIXME AC: include with retype_region_invs_extras *)
 lemma retype_region_invs_extras_vspace_objs:
   "\<lbrace>invs and pspace_no_overlap_range_cover ptr sz and caps_no_overlap ptr sz
          and caps_overlap_reserved {ptr..ptr + of_nat n * 2 ^ obj_bits_api ty us - 1}
@@ -680,14 +672,13 @@ definition authorised_asid_pool_inv :: "'a PAS \<Rightarrow> asid_pool_invocatio
   case api of Assign asid pool_ptr ct_slot \<Rightarrow>
     is_subject aag pool_ptr \<and> is_subject aag (fst ct_slot) \<and> is_subject_asid aag asid"
 
-(* FIXME ryanb: this is more general than pt_slot_offset_id *)
-thm pt_slot_offset_id
+(* FIXME AC: more general than pt_slot_offset_id, replace if possible *)
 lemma pt_slot_offset_id':
   "\<lbrakk> is_aligned pt_ptr pt_bits; mask pt_bits && (xa << pte_bits) = xa << pte_bits \<rbrakk>
      \<Longrightarrow> table_base (pt_ptr + (xa << pte_bits)) = pt_ptr"
   apply (simp add: pt_slot_offset_def is_aligned_mask_out_add_eq mask_eq_x_eq_0[symmetric])
-  apply (simp add: pt_index_def pt_bits_def table_size_def shiftl_over_and_dist mask_shiftl_decompose
-                  word_bool_alg.conj_ac)
+  apply (simp add: pt_index_def pt_bits_def table_size_def shiftl_over_and_dist
+                   mask_shiftl_decompose word_bool_alg.conj_ac)
   done
 
 lemma copy_global_mappings_integrity:
@@ -753,17 +744,7 @@ lemma store_pte_state_vrefs_unreachable:
   apply clarsimp
   done
 
-(* FIXME ryanb: manipulate the original? *)
-thm not_in_global_refs_vs_lookup
-lemma not_in_global_refs_vs_lookup:
-  "(\<exists>\<rhd> (level,p)) s \<and> valid_vs_lookup s \<and> valid_global_refs s
-            \<and> valid_arch_state s \<and> valid_global_objs s
-            \<and> pt_at p s
-        \<Longrightarrow> p \<notin> global_refs s"
-  using not_in_global_refs_vs_lookup by blast
-
-(* FIXME ryanb: original has unnecessary condition *)
-thm store_pte_valid_vs_lookup_unreachable
+(* FIXME AC: replace original, which has an unnecessary conjunct in the precondition *)
 lemma store_pte_valid_vs_lookup_unreachable:
   "\<lbrace>valid_vs_lookup and pspace_aligned and valid_vspace_objs and valid_asid_table and
     (\<lambda>s. \<forall>level. \<not> \<exists>\<rhd> (level, table_base p) s)\<rbrace>
@@ -1077,8 +1058,8 @@ lemma vspace_for_asid_vs_lookup':
                      vspace_for_pool_def asid_pools_of_ko_at obj_at_def
               split: option.splits)
 
-lemma decode_arch_invocation_authorised_helper:
-  "\<lbrakk> pas_refined aag s; valid_asid_table s; vspace_for_asid a s = Some xaa; is_subject_asid aag a \<rbrakk>
+lemma vspace_for_asid_is_subject:
+  "\<lbrakk> vspace_for_asid a s = Some xaa; pas_refined aag s; valid_asid_table s; is_subject_asid aag a \<rbrakk>
      \<Longrightarrow> is_subject aag xaa"
   apply (frule vspace_for_asid_vs_lookup)
   apply (clarsimp simp: vspace_for_asid_def)
@@ -1090,15 +1071,6 @@ lemma decode_arch_invocation_authorised_helper:
                       asid_low_bits_of_mask_eq[symmetric] ucast_ucast_b is_up_def source_size_def
                       target_size_def word_size aag_wellformed_Control pas_refined_def
                 dest: aag_wellformed_Control)+
-
-(* FIXME ryanb *)
-lemma pt_walk_is_subject':
-  "\<lbrakk> pt_walk level bot_level pt_ptr vptr (ptes_of s) = Some (level', pt);
-     vs_lookup_table level asid vptr s = Some (level, pt_ptr);
-     level \<le> max_pt_level; vptr \<in> user_region; is_subject aag pt_ptr;
-     pas_refined aag s; valid_vspace_objs s; valid_asid_table s; pspace_aligned s \<rbrakk>
-     \<Longrightarrow> is_subject aag pt"
-sorry
 
 lemma decode_page_table_invocation_authorised:
   "\<lbrace>invs and pas_refined aag and cte_wp_at ((=) (ArchObjectCap cap)) slot
@@ -1131,8 +1103,9 @@ lemma decode_page_table_invocation_authorised:
      apply (fastforce simp: cte_wp_at_caps_of_state
                       dest: caps_of_state_aligned_page_table pt_walk_is_aligned)
     apply (frule vs_lookup_table_vref_independent[OF vspace_for_asid_vs_lookup, simplified])
-    apply (erule (1) pt_walk_is_subject'; fastforce intro: decode_arch_invocation_authorised_helper
-                                                     simp: user_region_def user_vtop_canonical_user)
+    apply (erule pt_walk_is_subject[rotated 4]; fastforce intro: vspace_for_asid_is_subject
+                                                           simp: user_vtop_canonical_user
+                                                                 user_region_def)
    apply (clarsimp simp: aag_cap_auth_def cap_auth_conferred_def arch_cap_auth_conferred_def
                          cap_links_asid_slot_def label_owns_asid_slot_def cap_links_irq_def)
   apply (auto simp: caps_of_state_pasObjectAbs_eq authorised_page_table_inv_def
@@ -1173,7 +1146,7 @@ lemma decode_frame_invocation_authorised:
    apply (fastforce simp: cte_wp_at_caps_of_state
                     dest: caps_of_state_aligned_page_table pt_walk_is_aligned)
   apply (frule vs_lookup_table_vref_independent[OF vspace_for_asid_vs_lookup, simplified])
-  apply (erule (1) pt_walk_is_subject'; fastforce intro: decode_arch_invocation_authorised_helper)
+  apply (erule pt_walk_is_subject[rotated 4]; fastforce intro: vspace_for_asid_is_subject)
   done
 
 lemma decode_asid_control_invocation_authorised:
@@ -1265,12 +1238,6 @@ lemma set_thread_state_authorised_arch_inv[wp]:
                  split: option.splits)
   done
 
-(* FIXME ryanb - move back to Finalise? *)
-crunches arch_post_cap_deletion
-  for pspace_aligned[wp]: pspace_aligned
-  and valid_vspace_objs[wp]: valid_vspace_objs
-  and valid_arch_state[wp]: valid_arch_state
-
 end
 
 
@@ -1282,18 +1249,12 @@ requalify_facts
   decode_arch_invocation_authorised
   authorised_arch_inv_sa_update
   set_thread_state_authorised_arch_inv
-  arch_post_cap_deletion_pspace_aligned
-  arch_post_cap_deletion_valid_vspace_objs
-  arch_post_cap_deletion_valid_arch_state
 
 requalify_consts
   authorised_arch_inv
 
 end
 
-declare arch_post_cap_deletion_pspace_aligned[wp]
-declare arch_post_cap_deletion_valid_vspace_objs[wp]
-declare arch_post_cap_deletion_valid_arch_state[wp]
 declare authorised_arch_inv_sa_update[simp]
 declare set_thread_state_authorised_arch_inv[wp]
 
