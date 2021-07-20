@@ -21,8 +21,6 @@ imports
   "Lib.EquivValid"
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 section \<open>Scheduler domain constraint\<close>
 
 text \<open>
@@ -246,7 +244,11 @@ lemma equiv_for_id_update:
    equiv_for P id (c(x := v)) (c'(x := v))"
   by (simp add: equiv_for_def)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 subsection \<open>Machine state equivalence\<close>
+
 abbreviation equiv_machine_state
   :: "(word32 \<Rightarrow> bool)  \<Rightarrow> 'a machine_state_scheme \<Rightarrow> 'a machine_state_scheme \<Rightarrow> bool"
 where
@@ -328,6 +330,9 @@ where
     \<forall>x. (\<exists> asid_pool. kheap s x = Some (ArchObj (ASIDPool asid_pool)) \<or>
          kh x = Some (ArchObj (ASIDPool asid_pool))) \<longrightarrow> kheap s x = kh x"
 
+end
+
+
 definition identical_updates
 where
   "identical_updates k k' kh kh' \<equiv> \<forall>x. (kh x \<noteq> kh' x \<longrightarrow> (k x = kh x \<and> k' x = kh' x))"
@@ -351,6 +356,9 @@ lemma equiv_asids_non_asid_pool_kheap_update:
   apply(fastforce simp: equiv_asid'_def split: option.splits)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma equiv_asids_identical_kheap_updates:
   "\<lbrakk>equiv_asids R s s';
     identical_kheap_updates s s' kh kh'\<rbrakk> \<Longrightarrow>
@@ -369,6 +377,9 @@ lemma equiv_asids_triv:
    equiv_asids R t t'"
   apply(fastforce simp: equiv_asids_def equiv_asid equiv_asid'_def)
   done
+
+end
+
 
 subsection \<open>Generic state equivalence\<close>
 
@@ -640,6 +651,9 @@ lemma idle_equiv_trans: "idle_equiv s s' \<Longrightarrow> idle_equiv s' s'' \<L
   by (clarsimp simp add: idle_equiv_def tcb_at_def get_tcb_def split: option.splits
                   kernel_object.splits)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 subsection \<open>Exclusive machine state equivalence\<close>
 abbreviation exclusive_state_equiv
 where
@@ -659,6 +673,9 @@ definition globals_equiv :: "('z :: state_ext) state \<Rightarrow> ('z :: state_
       dom (device_state (machine_state s)) = dom (device_state (machine_state s')) \<and>
       cur_thread s = cur_thread s' \<and>
       (cur_thread s \<noteq> idle_thread s \<longrightarrow> exclusive_state_equiv s s')"
+
+end
+
 
 subsection \<open>read_equiv\<close>
 (* Basically defines the domain of the current thread, excluding globals.
@@ -1465,11 +1482,17 @@ lemma as_user_reads_respects:
   apply fastforce
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma get_message_info_rev:
   "reads_equiv_valid_inv A aag (K (is_subject aag ptr)) (get_message_info ptr)"
   apply (simp add: get_message_info_def)
   apply (wp as_user_rev | clarsimp simp: getRegister_def)+
   done
+
+end
+
 
 lemma syscall_rev:
   assumes reads_res_m_fault:
@@ -1648,6 +1671,9 @@ lemma spec_equiv_valid_hoist_guard:
   apply(clarsimp simp: spec_equiv_valid_def equiv_valid_2_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma dmo_loadWord_rev:
   "reads_equiv_valid_inv A aag (K (for_each_byte_of_word (aag_can_read aag) p))
      (do_machine_op (loadWord p))"
@@ -1673,6 +1699,9 @@ lemma dmo_loadWord_rev:
       apply (wp wp_post_taut loadWord_inv | simp)+
   done
 
+end
+
+
 lemma for_each_byte_of_word_imp:
   "(\<And> x. P x \<Longrightarrow> Q x) \<Longrightarrow>
    for_each_byte_of_word P p \<Longrightarrow> for_each_byte_of_word Q p"
@@ -1687,6 +1716,9 @@ lemma load_word_offs_rev:
   apply(clarsimp)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 (* generalises auth_ipc_buffers_mem_Write *)
 lemma auth_ipc_buffers_mem_Write':
   "\<lbrakk> x \<in> auth_ipc_buffers s thread; pas_refined aag s; valid_objs s\<rbrakk>
@@ -1699,6 +1731,9 @@ lemma auth_ipc_buffers_mem_Write':
                  split: if_split_asm)
    apply (auto dest: ipcframe_subset_page)
   done
+
+end
+
 
 section \<open>Constraining modifications to a set of label\<close>
 (*
@@ -1753,7 +1788,5 @@ lemma modifies_at_mostI:
 lemma invs_kernel_mappings:
   "invs s \<Longrightarrow> valid_kernel_mappings s"
   by (auto simp: invs_def valid_state_def)
-
-end
 
 end

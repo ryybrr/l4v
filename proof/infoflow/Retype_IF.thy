@@ -8,8 +8,6 @@ theory Retype_IF
 imports CNode_IF
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 lemma create_cap_reads_respects:
   "reads_respects aag l (K (is_subject aag (fst (fst slot))))
      (create_cap type bits untyped dev slot)"
@@ -70,6 +68,9 @@ lemma machine_op_lift_ev:
   apply (drule equiv_machine_state_machine_state_rest_update, fastforce)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma cacheRangeOp_ev[wp]:
   "(\<And>a b. equiv_valid_inv I A \<top> (oper a b))
     \<Longrightarrow> equiv_valid_inv I A \<top> (cacheRangeOp oper x y z)"
@@ -119,6 +120,9 @@ lemma freeMemory_ev:
    apply(rule mapM_x_ev[OF storeWord_ev])
    apply(rule wp_post_taut | simp)+
   done
+
+end
+
 
 lemma machine_op_lift_irq_state[wp]:
   " \<lbrace>\<lambda>ms. P (irq_state ms)\<rbrace> machine_op_lift mop \<lbrace>\<lambda>_ ms. P (irq_state ms)\<rbrace>"
@@ -185,6 +189,9 @@ lemma dmo_mapM_x_ev:
   shows "equiv_valid_inv D A I (do_machine_op (mapM_x m lst))"
   using assms by (auto intro: dmo_mapM_x_ev_pre)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma dmo_cacheRangeOp_reads_respects:
   "(\<And>a b. reads_respects aag l \<top> (do_machine_op (oper a b)))
     \<Longrightarrow> reads_respects aag l \<top> (do_machine_op (cacheRangeOp oper x y z))"
@@ -203,6 +210,18 @@ crunch irq_state[wp]: clearMemory "\<lambda>s. P (irq_state s)"
   (wp: crunch_wps simp: crunch_simps storeWord_def cleanByVA_PoU_def
    ignore_del: clearMemory)
 
+crunch irq_state[wp]: freeMemory "\<lambda>s. P (irq_state s)"
+  (wp: crunch_wps simp: crunch_simps storeWord_def)
+
+lemma set_pd_globals_equiv:
+  "\<lbrace>globals_equiv st and (\<lambda>s. a \<noteq> arm_global_pd (arch_state s))\<rbrace> set_pd a b \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
+  unfolding set_pd_def
+  by (wpsimp wp: set_object_globals_equiv[THEN hoare_set_object_weaken_pre]
+           simp: obj_at_def)
+
+end
+
+
 lemma dmo_clearMemory_reads_respects:
   "reads_respects aag l \<top> (do_machine_op (clearMemory ptr bits))"
   apply(rule use_spec_ev)
@@ -211,9 +230,6 @@ lemma dmo_clearMemory_reads_respects:
   apply wp
   done
 
-crunch irq_state[wp]: freeMemory "\<lambda>s. P (irq_state s)"
-  (wp: crunch_wps simp: crunch_simps storeWord_def)
-
 lemma dmo_freeMemory_reads_respects:
   "reads_respects aag l \<top> (do_machine_op (freeMemory ptr bits))"
   apply(rule use_spec_ev)
@@ -221,12 +237,6 @@ lemma dmo_freeMemory_reads_respects:
    apply(rule equiv_valid_guard_imp[OF freeMemory_ev], rule TrueI)
   apply wp
   done
-
-lemma set_pd_globals_equiv:
-  "\<lbrace>globals_equiv st and (\<lambda>s. a \<noteq> arm_global_pd (arch_state s))\<rbrace> set_pd a b \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
-  unfolding set_pd_def
-  by (wpsimp wp: set_object_globals_equiv[THEN hoare_set_object_weaken_pre]
-           simp: obj_at_def)
 
 lemma globals_equiv_cdt_update[simp]:
   "globals_equiv s (s'\<lparr> cdt := x \<rparr>) = globals_equiv s s'"
@@ -244,6 +254,9 @@ lemma create_cap_globals_equiv:
             set_cdt_valid_global_objs dxo_wp_weak set_original_wp | simp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma set_pd_reads_respects:
   "reads_respects aag l (K (is_subject aag a)) (set_pd a b)"
   unfolding set_pd_def
@@ -257,6 +270,9 @@ lemma set_pd_reads_respects_g:
                         set_pd_reads_respects set_pd_globals_equiv)
   done
 
+end
+
+
 abbreviation reads_equiv_valid_g_inv where
 "reads_equiv_valid_g_inv A aag P f \<equiv> equiv_valid_inv (reads_equiv_g aag) A P f"
 
@@ -266,6 +282,9 @@ lemma gets_apply_ev':
   apply(simp add: gets_apply_def get_def bind_def return_def)
   apply(clarsimp simp: equiv_valid_def2 equiv_valid_2_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma get_object_arm_global_pd_revg:
   "reads_equiv_valid_g_inv A aag (\<lambda> s. p = arm_global_pd (arch_state s)) (get_object p)"
@@ -346,6 +365,9 @@ lemma copy_global_mappings_reads_respects_g:
   apply(fastforce dest: reads_equiv_gD simp: globals_equiv_def)
   done
 
+end
+
+
 lemma do_machine_op_globals_equiv:
    "(\<And> s sa. \<lbrakk>P sa; globals_equiv s sa\<rbrakk> \<Longrightarrow>
          \<forall>x\<in>fst (f (machine_state sa)).
@@ -356,6 +378,9 @@ lemma do_machine_op_globals_equiv:
   unfolding do_machine_op_def
   apply (wp | simp add: split_def)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma dmo_no_mem_globals_equiv:
   "\<lbrakk>\<And>P. invariant f (\<lambda>ms. P (underlying_memory ms));
@@ -371,6 +396,9 @@ lemma dmo_no_mem_globals_equiv:
   apply (fastforce simp: valid_def globals_equiv_def idle_equiv_def)
   done
 
+end
+
+
 lemma mol_globals_equiv:
   "\<lbrace>\<lambda>ms. globals_equiv st (s\<lparr>machine_state := ms\<rparr>)\<rbrace> machine_op_lift mop \<lbrace>\<lambda>a b. globals_equiv st (s\<lparr>machine_state := b\<rparr>)\<rbrace>"
   unfolding machine_op_lift_def
@@ -378,6 +406,9 @@ lemma mol_globals_equiv:
   apply wp
   apply (clarsimp simp: globals_equiv_def idle_equiv_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma mol_exclusive_state:
   "invariant (machine_op_lift mop) (\<lambda>ms. P (exclusive_state ms))"
@@ -411,6 +442,9 @@ lemma storeWord_globals_equiv:
   apply wp
   apply (clarsimp simp: globals_equiv_def idle_equiv_def)
   done
+
+end
+
 
 lemma ptr_range_memE:
   "\<lbrakk>x \<in> ptr_range ptr bits; \<lbrakk>ptr \<le> x; x \<le> ptr + 2 ^ bits - 1\<rbrakk> \<Longrightarrow> R\<rbrakk> \<Longrightarrow> R"
@@ -469,6 +503,7 @@ lemma ptr_range_subset:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma dmo_clearMemory_globals_equiv:
   "\<lbrace> globals_equiv s \<rbrace>
@@ -504,6 +539,9 @@ lemma dmo_freeMemory_globals_equiv:
   apply(simp_all)
   done
 
+end
+
+
 lemma dmo_freeMemory_reads_respects_g:
   "reads_respects_g aag l (\<lambda> s. is_aligned ptr bits \<and> 2 \<le> bits \<and> bits < word_bits)
   (do_machine_op (freeMemory ptr bits))"
@@ -530,6 +568,8 @@ text \<open>
         | intro conjI impI)+
      (create_word_objects ptr numObjects bits dev)"
 \<close>
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma init_arch_objects_reads_respects_g:
   "reads_respects_g aag l
@@ -583,6 +623,9 @@ lemma init_arch_objects_globals_equiv:
                         pd_bits_def pageBits_def | blast)+
   done
 
+end
+
+
 lemma create_cap_reads_respects_g:
   "reads_respects_g aag l (K (is_subject aag (fst (fst slot))) and valid_global_objs)
   (create_cap type bits untyped dev slot)"
@@ -591,12 +634,18 @@ lemma create_cap_reads_respects_g:
    apply(rule doesnt_touch_globalsI[OF create_cap_globals_equiv])
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma default_object_not_asid_pool:
   "\<lbrakk>type \<noteq> ArchObject ASIDPoolObj; type \<noteq> Untyped\<rbrakk> \<Longrightarrow>
         \<not> default_object type o_bits dev = ArchObj (ASIDPool asid_pool)"
   apply(clarsimp simp: default_object_def split: apiobject_type.splits
     simp: default_arch_object_def split: aobject_type.splits)
   done
+
+end
+
 
 lemma retype_region_ext_def2:
   "retype_region_ext a b =
@@ -640,6 +689,9 @@ lemma updates_not_idle: "idle_equiv st s \<Longrightarrow> \<forall>a \<in> S. a
   apply (clarsimp simp add: idle_equiv_def tcb_at_def2)
   apply blast
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* FIXME: cleanup this proof *)
 lemma retype_region_globals_equiv:
@@ -720,6 +772,8 @@ lemma retype_region_globals_equiv:
   apply(auto intro!: cte_wp_at_pspace_no_overlapI simp: range_cover_def word_bits_def)[1]
   done
 
+end
+
 
 lemma retype_region_reads_respects_g:
   "reads_respects_g aag l
@@ -788,6 +842,9 @@ lemma detype_reads_respects:
   apply (fastforce intro: states_equiv_for_detype)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma detype_globals_equiv:
   "\<lbrace> globals_equiv st and ((\<lambda> s. arm_global_pd (arch_state s) \<notin> S) and (\<lambda> s. idle_thread s \<notin> S)) \<rbrace>
    modify (detype S)
@@ -817,6 +874,8 @@ lemma obj_range_small_page_as_ptr_range:
   apply(simp add: ptr_range_def)
   done
 
+end
+
 
 lemma untyped_caps_do_not_overlap_global_refs:
   "\<lbrakk>cte_wp_at ((=) (UntypedCap dev word sz idx)) slot s;
@@ -837,6 +896,9 @@ lemma cap_range_of_valid_capD:
    apply (case_tac cap,auto simp: valid_cap_def valid_untyped_def cap_aligned_def cap_range_def ptr_range_def)[1]
    apply (intro exI | rule singleton_set_size[symmetric])+
    done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* FIX ME: Many ptr_range proofs are not nice, should use the following lemma instead *)
 lemma ptr_range_disjoint_strong:
@@ -872,12 +934,17 @@ lemma obj_range_page_as_ptr_range_pageBitsForSize:
   apply(simp add: ptr_range_def)
   done
 
+end
+
 
 lemma pspace_distinct_def':
   "pspace_distinct \<equiv> \<lambda>s. \<forall>x y ko ko'.
              kheap s x = Some ko \<and> kheap s y = Some ko' \<and> x \<noteq> y \<longrightarrow>
              obj_range x ko \<inter> obj_range y ko' = {}"
   by(auto simp: pspace_distinct_def obj_range_def field_simps)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma delete_objects_reads_respects_g:
  "reads_equiv_valid_g_inv (affects_equiv aag l) aag
@@ -893,6 +960,9 @@ lemma delete_objects_reads_respects_g:
   apply (unfold ptr_range_def)
   apply simp
   done
+
+end
+
 
 lemma set_cap_reads_respects_g:
   "reads_respects_g aag l (valid_global_objs and K (is_subject aag (fst slot))) (set_cap cap slot)"
@@ -958,11 +1028,16 @@ lemma only_timer_irq_inv_work_units_completed[simp]:
                    irq_is_recurring_def is_irq_at_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma no_irq_freeMemory:
   "no_irq (freeMemory ptr sz)"
   apply (simp add: freeMemory_def)
   apply (wp no_irq_mapM_x no_irq_storeWord)
   done
+end
+
 
 crunch irq_masks[wp]: delete_objects "\<lambda>s. P (irq_masks (machine_state s))"
   (ignore: do_machine_op wp: dmo_wp no_irq_freeMemory no_irq
@@ -987,6 +1062,9 @@ lemma delete_objects_pspace_no_overlap_again:
 lemma ex_tupleI:
   "P (fst t) (snd t) \<Longrightarrow> \<exists>a b. P a b"
   by blast
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma reset_untyped_cap_reads_respects_g:
  "reads_equiv_valid_g_inv (affects_equiv aag l) aag
@@ -1069,6 +1147,9 @@ lemma reset_untyped_cap_reads_respects_g:
   apply (fastforce simp: untyped_min_bits_def)
   done
 
+end
+
+
 lemma equiv_valid_obtain:
   assumes fn_eq: "\<And>s t. I s t \<Longrightarrow> A s t \<Longrightarrow> P s \<Longrightarrow> P t \<Longrightarrow>  fn s = fn t"
   assumes pr: "\<And>x. equiv_valid I A B (P and (\<lambda>s. fn s = x)) f"
@@ -1097,6 +1178,9 @@ lemma reads_equiv_caps_of_state:
   apply (auto simp: cte_wp_at_caps_of_state)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma untyped_cap_refs_in_kernel_window_helper:
   "\<lbrakk> caps_of_state s p = Some (UntypedCap dev ptr sz idx);
     cap_refs_in_kernel_window s;
@@ -1107,9 +1191,15 @@ lemma untyped_cap_refs_in_kernel_window_helper:
   apply blast
   done
 
+end
+
+
 lemma invs_valid_global_objs_strg:
   "invs s \<longrightarrow> valid_global_objs s"
   by (clarsimp simp: invs_def valid_state_def)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma retype_region_ret_pd_aligned:
   "\<lbrace>K (range_cover ptr sz (obj_bits_api tp us) num_objects)\<rbrace>
@@ -1248,6 +1338,9 @@ lemma invoke_untyped_reads_respects_g_wcap:
   apply (erule disjE, simp_all)[1]
   done
 
+end
+
+
 lemma invoke_untyped_reads_respects_g:
   "reads_respects_g aag l (invs and valid_untyped_inv ui
       and only_timer_irq_inv irq st
@@ -1266,6 +1359,9 @@ lemma invoke_untyped_reads_respects_g:
    apply simp
   apply (cases ui, clarsimp simp: valid_untyped_inv_wcap cte_wp_at_caps_of_state)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma delete_objects_globals_equiv[wp]:
   "\<lbrace>globals_equiv st and

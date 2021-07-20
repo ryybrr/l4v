@@ -8,8 +8,6 @@ theory Arch_IF
 imports Retype_IF
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 abbreviation irq_state_of_state :: "det_state \<Rightarrow> nat" where
   "irq_state_of_state s \<equiv> irq_state (machine_state s)"
 
@@ -24,14 +22,22 @@ lemma no_irq_underlying_memory_update[simp]:
 crunch irq_state_of_state[wp]: cap_insert "\<lambda>s. P (irq_state_of_state s)"
   (wp: crunch_wps)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch irq_state_of_state[wp]: set_extra_badge "\<lambda>s. P (irq_state_of_state s)"
   (wp: crunch_wps dmo_wp simp: storeWord_def)
+
+end
 
 
 lemma transfer_caps_loop_irq_state[wp]:
   "\<lbrace>\<lambda>s. P (irq_state_of_state s)\<rbrace> transfer_caps_loop a b c d e f \<lbrace>\<lambda>_ s. P (irq_state_of_state s)\<rbrace>"
   apply(wp transfer_caps_loop_pres)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch irq_state_of_state[wp]: set_mrs "\<lambda>s. P (irq_state_of_state s)"
   (wp: crunch_wps dmo_wp simp: crunch_simps maskInterrupt_def store_word_offs_def storeWord_def ignore: const_on_failure)
@@ -45,7 +51,6 @@ crunch irq_state_of_state[wp]: handle_reply "\<lambda>s. P (irq_state_of_state s
 crunch irq_state_of_state[wp]: handle_vm_fault, handle_hypervisor_fault "\<lambda>s. P (irq_state_of_state s)"
   (wp: crunch_wps dmo_wp simp: crunch_simps maskInterrupt_def unless_def store_word_offs_def storeWord_def ignore: const_on_failure getFAR getDFSR getIFSR simp: getDFSR_def no_irq_getFAR getFAR_def getIFSR_def)
 
-
 lemma irq_state_clearExMonitor[wp]: "\<lbrace> \<lambda>s. P (irq_state s) \<rbrace> clearExMonitor \<lbrace> \<lambda>_ s. P (irq_state s) \<rbrace>"
   apply (simp add: clearExMonitor_def | wp modify_wp)+
   done
@@ -56,6 +61,9 @@ crunch irq_state_of_state[wp]: schedule "\<lambda>(s::det_state). P (irq_state_o
              machine_op_lift_def machine_rest_lift_def crunch_simps storeWord_def
              dsb_def isb_def writeTTBR0_def)
 
+end
+
+
 crunch irq_state_of_state[wp]: reply_from_kernel "\<lambda>s. P (irq_state_of_state s)"
 
 
@@ -63,6 +71,9 @@ lemma detype_irq_state_of_state[simp]:
   "irq_state_of_state (detype S s) = irq_state_of_state s"
   apply(simp add: detype_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 text \<open>Not true of invoke_untyped any more.\<close>
 crunch irq_state_of_state[wp]: retype_region,create_cap,delete_objects "\<lambda>s. P (irq_state_of_state s)"
@@ -85,11 +96,14 @@ crunch irq_state_of_state[wp]: finalise_cap "\<lambda>(s::det_state). P (irq_sta
 
 crunch irq_state_of_state[wp]: send_signal "\<lambda>s. P (irq_state_of_state s)"
 
-crunch irq_state_of_state[wp]: cap_swap_for_delete "\<lambda>(s::det_state). P (irq_state_of_state s)"
-
 crunch irq_state_of_state[wp]: cancel_badged_sends "\<lambda>(s::det_state). P (irq_state_of_state s)"
   (wp: crunch_wps dmo_wp hoare_unless_wp modify_wp simp: filterM_mapM crunch_simps no_irq_clearMemory simp: clearMemory_def storeWord_def invalidateLocalTLB_ASID_def
    ignore: filterM)
+
+end
+
+
+crunch irq_state_of_state[wp]: cap_swap_for_delete "\<lambda>(s::det_state). P (irq_state_of_state s)"
 
 crunch irq_state_of_state[wp]: restart,invoke_domain "\<lambda>(s::det_state). P (irq_state_of_state s)"
 
@@ -127,6 +141,9 @@ lemma get_object_revrv':
      apply(simp add: equiv_for_def)
     apply(wpsimp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma get_asid_pool_revrv':
   "reads_equiv_valid_rv_inv (affects_equiv aag l) aag
@@ -200,6 +217,8 @@ lemma get_asid_pool_rev:
   apply(wp get_object_rev | wpc | simp)+
   done
 
+end
+
 
 lemma assertE_reads_respects:
   "reads_respects aag l \<top> (assertE P)"
@@ -214,6 +233,9 @@ lemma gets_applyE:
 lemma aag_can_read_own_asids:
   "is_subject_asid aag asid \<Longrightarrow> aag_can_read_asid aag asid"
   by simp
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma get_asid_pool_revrv:
   "reads_equiv_valid_rv_inv (affects_equiv aag l) aag
@@ -409,6 +431,9 @@ lemmas states_equiv_for_arm_asid_map_update =
   states_equiv_for_arm_asid_map_update1
   states_equiv_for_arm_asid_map_update2
 
+end
+
+
 (* for things that only modify parts of the state not in the state relations,
    we don't care what they read since these reads are unobservable anyway;
    however, we cannot assert anything about their return-values *)
@@ -485,11 +510,16 @@ lemma equiv_valid_2_unobservable:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch states_equiv_for: invalidate_hw_asid_entry "states_equiv_for P Q R S st"
   (simp: states_equiv_for_arm_hwasid_table_update)
 
 crunch states_equiv_for: invalidate_asid "states_equiv_for P Q R S st"
   (simp: states_equiv_for_arm_asid_map_update)
+
+end
+
 
 lemma mol_states_equiv_for:
   "\<lbrace>\<lambda>ms. states_equiv_for P Q R S st (s\<lparr>machine_state := ms\<rparr>)\<rbrace> machine_op_lift mop \<lbrace>\<lambda>a b. states_equiv_for P Q R S st (s\<lparr>machine_state := b\<rparr>)\<rbrace>"
@@ -511,6 +541,8 @@ lemma do_machine_op_mol_states_equiv_for:
    apply(rule mol_states_equiv_for)
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* we don't care about the relationship between virtual and hardware asids at all --
    these should be unobservable, so rightly we don't expect this one to satisfy
@@ -571,6 +603,9 @@ lemma find_free_hw_asid_states_equiv_for:
 
 crunch states_equiv_for: get_hw_asid "states_equiv_for P Q R S st"
 
+end
+
+
 lemma reads_respects_unobservable_unit_return:
   assumes f:
     "\<And> P Q R S st. \<lbrace> states_equiv_for P Q R S st \<rbrace> f \<lbrace>\<lambda>_. states_equiv_for P Q R S st\<rbrace>"
@@ -597,6 +632,9 @@ lemma dmo_mol_irq_state_of_state[wp]:
        \<lbrace>\<lambda>_ s. P (irq_state_of_state s) \<rbrace>"
   apply(wp dmo_wp | simp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma arm_context_switch_reads_respects:
   "reads_respects aag l \<top> (arm_context_switch pd asid)"
@@ -630,12 +668,18 @@ lemma get_pte_reads_respects:
   unfolding get_pte_def fun_app_def
   by (wpsimp wp: get_pt_reads_respects)
 
+end
+
+
 lemma gets_cur_thread_revrv:
   "reads_equiv_valid_rv_inv (affects_equiv aag l) aag (=) \<top> (gets cur_thread)"
   apply(rule equiv_valid_rv_guard_imp)
    apply(rule gets_evrv)
   apply(fastforce simp: equiv_for_comp[symmetric] equiv_for_or or_comp_dist elim: reads_equivE affects_equivE)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch states_equiv_for: set_vm_root_for_flush "states_equiv_for P Q R S st"
   (wp: do_machine_op_mol_states_equiv_for ignore: do_machine_op simp: set_current_pd_def)
@@ -722,12 +766,18 @@ lemma perform_page_directory_invocation_reads_respects:
   apply (wp do_flush_reads_respects set_vm_root_reads_respects set_vm_root_for_flush_reads_respects | simp add: when_def requiv_cur_thread_eq split del: if_split | wp (once) hoare_drop_imps | clarsimp)+
   done
 
+end
+
+
 lemma throw_on_false_reads_respects:
   "reads_respects aag l P f \<Longrightarrow>
   reads_respects aag l P (throw_on_false ex f)"
   unfolding throw_on_false_def fun_app_def unlessE_def
   apply(wp | simp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma check_mapping_pptr_reads_respects:
   "reads_respects aag l
@@ -783,6 +833,9 @@ lemma unmap_page_reads_respects:
        | wp (once) hoare_drop_imps)+
   done
 
+end
+
+
 lemma dmo_mol_2_reads_respects:
   "reads_respects aag l \<top> (do_machine_op (machine_op_lift mop >>= (\<lambda> y. machine_op_lift mop')))"
   apply(rule use_spec_ev)
@@ -797,6 +850,8 @@ lemma tl_subseteq:
   "set (tl xs) \<subseteq> set xs"
   by (induct xs, auto)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch states_equiv_for: invalidate_tlb_by_asid "states_equiv_for P Q R S st"
   (wp: do_machine_op_mol_states_equiv_for ignore: do_machine_op simp: invalidateLocalTLB_ASID_def)
@@ -829,6 +884,8 @@ lemma get_master_pde_reads_respects:
        | wp (once) hoare_drop_imps)+
   apply(fastforce simp: pd_bits_def pageBits_def mask_lower_twice)
   done
+
+end
 
 
 abbreviation(input) aag_can_read_label where
@@ -907,6 +964,9 @@ lemma dummy_kheap_update:
   "st = st\<lparr> kheap := kheap st \<rparr>"
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 (* we need to know we're not doing an asid pool update, or else this could affect
    what some other domain sees *)
 lemma set_object_equiv_but_for_labels:
@@ -928,6 +988,9 @@ lemma set_object_equiv_but_for_labels:
 lemma get_tcb_not_asid_pool_at:
   "get_tcb ref s = Some y \<Longrightarrow> \<not> asid_pool_at ref s"
   by(fastforce simp: get_tcb_def asid_pool_at_kheap)
+
+end
+
 
 lemma as_user_set_register_ev2:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -959,6 +1022,9 @@ lemma reads_affects_equiv_get_tcb_eq:
   apply (fastforce simp: get_tcb_def split: kernel_object.splits option.splits simp: reads_affects_equiv_kheap_eq)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma as_user_set_register_reads_respects':
   assumes domains_distinct: "pas_domains_distinct aag"
   shows
@@ -979,6 +1045,9 @@ lemma as_user_get_register_reads_respects:
   apply (wp set_object_reads_respects select_f_ev gets_the_ev)
   apply (auto intro: reads_affects_equiv_get_tcb_eq det_getRegister)[1]
   done
+
+end
+
 
 lemma set_message_info_reads_respects:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -1003,6 +1072,9 @@ lemma equiv_valid_get_assert:
      apply (wp | simp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma store_word_offs_reads_respects:
   "reads_respects aag l \<top> (store_word_offs ptr offs v)"
   apply(simp add: store_word_offs_def)
@@ -1018,6 +1090,8 @@ lemma store_word_offs_reads_respects:
          | simp add: spec_equiv_valid_def | rule assert_ev2 | wp modify_wp)+
   done
 
+end
+
 
 lemma set_mrs_reads_respects:
   "reads_respects aag l (K (aag_can_read aag thread \<or> aag_can_affect aag l thread)) (set_mrs thread buf msgs)"
@@ -1026,6 +1100,9 @@ lemma set_mrs_reads_respects:
        | wpc | simp add: split_def split del: if_split add: zipWithM_x_mapM_x)+
   apply(auto intro: reads_affects_equiv_get_tcb_eq)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma perform_page_invocation_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1084,6 +1161,8 @@ lemma arm_asid_table_update_reads_respects:
    apply (auto simp add: reads_equiv_def2 affects_equiv_def2 states_equiv_for_def equiv_for_def intro!: equiv_asids_arm_asid_table_update)
    done
 
+end
+
 
 lemma my_bind_rewrite_lemma:
   "(f >>= g) =  (f >>= (\<lambda> r. (g r) >>= (\<lambda> x. return ())))"
@@ -1100,6 +1179,9 @@ lemma another_hacky_rewrite:
   "do a; (do x \<leftarrow> f; g x od); h; j od = do a; (f >>= g >>= (\<lambda>_. h)); j od"
   apply(simp add: bind_assoc[symmetric])
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma perform_asid_control_invocation_reads_respects:
   notes K_bind_ev[wp del]
@@ -1253,6 +1335,9 @@ lemma delete_asid_pool_reads_respects:
               simp add: equiv_valid_2_def )+
 done
 
+end
+
+
 definition states_equal_except_kheap_asid :: "det_state \<Rightarrow> det_state \<Rightarrow> bool" where
   "states_equal_except_kheap_asid s s' \<equiv>
      equiv_machine_state \<top> (machine_state s) (machine_state s') \<and>
@@ -1268,6 +1353,9 @@ definition states_equal_except_kheap_asid :: "det_state \<Rightarrow> det_state 
      scheduler_action s = scheduler_action s' \<and>
      work_units_completed s = work_units_completed s' \<and>
      irq_state_of_state s = irq_state_of_state s'"
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma set_asid_pool_state_equal_except_kheap:
   "((), s') \<in> fst (set_asid_pool ptr pool s) \<Longrightarrow>
@@ -1392,6 +1480,8 @@ lemma delete_asid_reads_respects:
    apply(clarsimp | wpsimp)+
    done
 
+end
+
 
 subsection "globals_equiv"
 
@@ -1430,6 +1520,9 @@ lemma set_bound_notification_globals_equiv:
                 split: option.splits kernel_object.splits)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma set_object_valid_ko_at_arm[wp]:
   "\<lbrace>valid_ko_at_arm and (\<lambda>s. ptr = arm_global_pd (arch_state s) \<longrightarrow>
    a_type obj = AArch APageDirectory)\<rbrace>
@@ -1437,6 +1530,9 @@ lemma set_object_valid_ko_at_arm[wp]:
   by (wpsimp wp: set_object_wp
            simp: a_type_def valid_ko_at_arm_def obj_at_def
           split: kernel_object.splits arch_kernel_obj.splits if_splits)
+
+end
+
 
 lemma valid_ko_at_arm_exst_update[simp]: "valid_ko_at_arm (trans_state f s) = valid_ko_at_arm s"
   apply (simp add: valid_ko_at_arm_def)
@@ -1470,6 +1566,9 @@ lemma thread_set_globals_equiv:
   apply (clarsimp simp: get_tcb_def tcb_at_def2 split: kernel_object.splits option.splits)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma set_asid_pool_globals_equiv:
   "\<lbrace>globals_equiv s and valid_ko_at_arm\<rbrace> set_asid_pool ptr pool \<lbrace>\<lambda>_. globals_equiv s\<rbrace>"
   unfolding set_asid_pool_def
@@ -1478,9 +1577,15 @@ lemma set_asid_pool_globals_equiv:
   apply (fastforce simp: valid_ko_at_arm_def obj_at_def)
   done
 
+end
+
+
 lemma idle_equiv_arch_state_update[simp]: "idle_equiv st (s\<lparr>arch_state := x\<rparr>) = idle_equiv st s"
   apply (simp add: idle_equiv_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch globals_equiv[wp]: invalidate_hw_asid_entry "globals_equiv s"
  (simp: globals_equiv_def)
@@ -1614,6 +1719,9 @@ lemma not_in_global_refs_vs_lookup2: "\<lbrakk>
   apply simp
 done
 
+end
+
+
 (*FIXME: This should either be straightforward or moved somewhere else*)
 
 lemma case_junk : "((case rv of Inl e \<Rightarrow> True | Inr r \<Rightarrow> P r) \<longrightarrow> (case rv of Inl e \<Rightarrow> True | Inr r \<Rightarrow> R r)) =
@@ -1630,6 +1738,9 @@ lemma hoare_add_postE : "\<lbrace>Q\<rbrace> f \<lbrace>\<lambda> r. P r\<rbrace
   apply (erule hoare_post_imp[rotated])
   apply (simp add: case_junk)
 done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma find_pd_for_asid_not_arm_global_pd:
   "\<lbrace>pspace_aligned and valid_vspace_objs and valid_global_objs and valid_vs_lookup
@@ -1663,7 +1774,13 @@ lemma find_pd_for_asid_not_arm_global_pd_large_page:
    apply (auto simp: global_refs_def)
   done
 
+end
+
+
 declare dmo_mol_globals_equiv[wp]
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma unmap_page_table_globals_equiv:
   "\<lbrace>pspace_aligned and valid_vspace_objs and valid_global_objs and valid_vs_lookup
@@ -1696,13 +1813,16 @@ lemma mapM_x_swp_store_pte_valid_ko_at_arm[wp]:
   apply(wp mapM_x_wp' | simp add: swp_def)+
   done
 
+end
+
+
 lemma set_cap_globals_equiv'':
   "\<lbrace>globals_equiv s and valid_ko_at_arm\<rbrace>
   set_cap cap p \<lbrace>\<lambda>_. globals_equiv s\<rbrace>"
   unfolding set_cap_def
   apply(simp only: split_def)
   apply(wp set_object_globals_equiv hoare_vcg_all_lift get_object_wp | wpc | simp)+
-   apply(fastforce simp: valid_ko_at_arm_def valid_ao_at_def obj_at_def is_tcb_def)+
+   apply(fastforce simp: valid_ko_at_arm_def obj_at_def is_tcb_def)+
   done
 
 lemma do_machine_op_valid_ko_at_arm[wp]:
@@ -1710,6 +1830,9 @@ lemma do_machine_op_valid_ko_at_arm[wp]:
   unfolding do_machine_op_def machine_op_lift_def split_def valid_ko_at_arm_def
   apply(wp modify_wp, simp)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma valid_ko_at_arm_next_asid[simp]:
   "valid_ko_at_arm (s\<lparr>arch_state := arch_state s\<lparr>arm_next_asid := x\<rparr>\<rparr>)
@@ -1732,10 +1855,15 @@ lemma valid_ko_at_arm_asid_table[simp]:
                      \<lparr>arm_asid_table := A\<rparr>\<rparr>) =
    valid_ko_at_arm s" by (simp add: valid_ko_at_arm_def)
 
+end
+
 lemma valid_ko_at_arm_interrupt_states[simp]:
   "valid_ko_at_arm (s\<lparr>interrupt_states := f\<rparr>)
   = valid_ko_at_arm s"
   by (simp add: valid_ko_at_arm_def)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma valid_ko_at_arm_arch[simp]:
   "arm_global_pd A = arm_global_pd (arch_state s) \<Longrightarrow>
@@ -1888,6 +2016,9 @@ definition authorised_for_globals_page_inv :: "page_invocation \<Rightarrow> 'z:
   where "authorised_for_globals_page_inv pgi \<equiv>
     \<lambda>s. case pgi of PageMap asid cap ptr m \<Rightarrow> \<exists>slot. cte_wp_at (parent_for_refs m) slot s | _ \<Rightarrow> True"
 
+end
+
+
 lemma set_cap_valid_ko_at_arm[wp]:
   "\<lbrace>valid_ko_at_arm\<rbrace> set_cap cap p \<lbrace>\<lambda>_. valid_ko_at_arm\<rbrace>"
   apply(simp add: valid_ko_at_arm_def)
@@ -1900,8 +2031,14 @@ lemma set_cap_valid_ko_at_arm[wp]:
   apply(fastforce simp: obj_at_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch valid_ko_at_arm[wp]: unmap_page "valid_ko_at_arm"
   (wp: crunch_wps)
+
+end
+
 
 lemma as_user_globals_equiv:
   "\<lbrace>globals_equiv s and valid_ko_at_arm and (\<lambda>s. tptr \<noteq> idle_thread s)\<rbrace> as_user tptr f
@@ -1932,15 +2069,11 @@ lemma store_word_offs_globals_equiv:
   done
 
 
-lemma length_msg_registers:
-  "length msg_registers = 4"
-  unfolding msg_registers_def
-  by (simp add: msgRegisters_def upto_enum_def fromEnum_def enum_register)
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma length_msg_lt_msg_max:
   "length msg_registers < msg_max_length"
-  apply(simp add: length_msg_registers msg_max_length_def)
-  done
+  by (simp add: msg_registers_def msgRegisters_def upto_enum_def fromEnum_def enum_register msg_max_length_def)
 
 
 lemma arm_global_pd_not_tcb:
@@ -1950,6 +2083,8 @@ lemma arm_global_pd_not_tcb:
   apply simp
   apply(clarsimp simp: valid_ko_at_arm_def get_tcb_ko_at obj_at_def)
   done
+
+end
 
 
 lemma set_mrs_globals_equiv:
@@ -1977,6 +2112,9 @@ lemma set_mrs_globals_equiv:
 
 crunch valid_ko_at_arm[wp]: set_mrs valid_ko_at_arm
   (wp: crunch_wps simp: crunch_simps arm_global_pd_not_tcb)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma perform_page_invocation_globals_equiv:
   "\<lbrace>authorised_for_globals_page_inv pgi and valid_page_inv pgi and globals_equiv st
@@ -2009,6 +2147,9 @@ lemma retype_region_ASIDPoolObj_globals_equiv:
   apply (fastforce simp: globals_equiv_def idle_equiv_def tcb_at_def2)
   done
 
+end
+
+
 crunch valid_ko_at_arm[wp]: "set_untyped_cap_as_full" "valid_ko_at_arm"
 
 lemma cap_insert_globals_equiv'':
@@ -2020,6 +2161,7 @@ lemma cap_insert_globals_equiv'':
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma retype_region_ASIDPoolObj_valid_ko_at_arm:
   "\<lbrace>valid_ko_at_arm and (\<lambda>s. ptr \<noteq> arm_global_pd (arch_state s))\<rbrace>
@@ -2261,6 +2403,8 @@ lemma decode_arch_invocation_authorised_for_globals:
    apply(simp)
   by(fastforce)
 
+end
+
 
 lemma as_user_valid_ko_at_arm[wp]:
   "\<lbrace> valid_ko_at_arm \<rbrace>
@@ -2272,6 +2416,9 @@ lemma as_user_valid_ko_at_arm[wp]:
      apply (simp | wp select_wp)+
   apply(fastforce simp: valid_ko_at_arm_def get_tcb_ko_at obj_at_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma valid_arch_arm_asid_table_unmap:
   "valid_arch_state s
@@ -2318,7 +2465,15 @@ lemma delete_asid_pool_valid_vspace_objs[wp]:
       apply (wpsimp wp: mapM_wp')+
   done
 
+end
+
+
 crunch valid_vspace_objs[wp]: cap_swap_for_delete "valid_vspace_objs"
+
+lemma restrict_eq_asn_none: "f(N := None) = f |` {s. s \<noteq> N}" by auto
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma set_asid_pool_arch_objs_unmap'':
  "\<lbrace>(valid_vspace_objs and ko_at (ArchObj (ASIDPool ap)) p) and K(f = (ap |` S))\<rbrace> set_asid_pool p f \<lbrace>\<lambda>_. valid_vspace_objs\<rbrace>"
@@ -2328,16 +2483,6 @@ lemma set_asid_pool_arch_objs_unmap'':
   done
 
 lemmas set_asid_pool_vspace_objs_unmap'' = set_asid_pool_arch_objs_unmap''
-
-
-lemma restrict_eq_asn_none: "f(N := None) = f |` {s. s \<noteq> N}" by auto
-
-lemma delete_asid_valid_arch_objs[wp]:
-  "\<lbrace>valid_vspace_objs and pspace_aligned\<rbrace> delete_asid a b \<lbrace>\<lambda>_. valid_vspace_objs\<rbrace>"
-  unfolding delete_asid_def
-  apply (wpsimp wp: set_asid_pool_arch_objs_unmap'')
-  apply (fastforce simp: restrict_eq_asn_none)
-  done
 
 lemma delete_asid_valid_vspace_objs[wp]:
   "\<lbrace>valid_vspace_objs and pspace_aligned\<rbrace> delete_asid a b \<lbrace>\<lambda>_. valid_vspace_objs\<rbrace>"
@@ -2358,6 +2503,9 @@ lemma store_pte_valid_vspace_objs[wp]:
   apply auto
 done
 
+end
+
+
 declare get_cap_global_refs[wp]
 
 crunch valid_global_refs[wp]: cap_swap_for_delete "valid_global_refs"
@@ -2365,10 +2513,16 @@ crunch valid_global_refs[wp]: cap_swap_for_delete "valid_global_refs"
    simp: crunch_simps
    ignore: set_object cap_swap_ext)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch valid_global_refs[wp]: empty_slot "valid_global_refs"
   (wp: hoare_drop_imps set_cap_globals dxo_wp_weak
    simp: cap_range_def
    ignore: set_object empty_slot_ext)
+
+end
+
 
 lemma thread_set_fault_valid_global_refs[wp]:
   "\<lbrace>valid_global_refs\<rbrace> thread_set (tcb_fault_update A) thread \<lbrace>\<lambda>_. valid_global_refs\<rbrace>"
@@ -2383,6 +2537,9 @@ lemma cap_swap_for_delete_valid_arch_caps[wp]:
   apply (wp get_cap_wp)
   apply (clarsimp simp: cte_wp_at_weakenE)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma mapM_x_swp_store_pte_reads_respects':
   "reads_respects aag l (invs and (cte_wp_at ((=) (ArchObjectCap (PageTableCap word option))) slot) and K (is_subject aag word))

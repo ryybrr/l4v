@@ -31,8 +31,6 @@ holds in integrity_part.
 
 \<close>
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 section \<open>sameFor : unwinding relation\<close>
 
 datatype 'a partition = Partition 'a | PSched
@@ -362,6 +360,7 @@ where
     globals_equiv_scheduler s s' \<and> silc_dom_equiv aag s s'"
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma integrity_irq_state_independent:
   "irq_state_independent
@@ -388,6 +387,9 @@ lemma invs_irq_state_independent:
          (\<lambda>sa. invs (s\<lparr>machine_state := sa\<rparr>))"
   by(auto simp: irq_state_independent_def invs_def valid_state_def
                 valid_machine_state_def cur_tcb_def valid_irq_states_def)
+
+end
+
 
 lemma thread_set_tcb_context_update_ct_active[wp]:
   "\<lbrace>\<lambda>s. P (ct_active s)\<rbrace>
@@ -422,6 +424,9 @@ lemma thread_set_tcb_context_update_wp:
   apply (wp set_object_wp)
   apply simp
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* lots of ugly hackery because handle_event_integrity wants the reference state to
    be identical to the initial one, but it isn't because we first update the
@@ -468,6 +473,9 @@ lemma kernel_entry_if_integrity:
   apply(rule ext, simp_all)
   done
 
+end
+
+
 lemma dmo_device_update_respects_Write:
   "\<lbrace>integrity aag X st and K (\<forall>p \<in> dom um'. aag_has_auth_to aag Write p)\<rbrace>
      do_machine_op (device_memory_update um')
@@ -484,6 +492,9 @@ lemma dmo_device_update_respects_Write:
    apply simp
   apply fastforce
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* clagged straight from ADT_AC.do_user_op_respects *)
 lemma do_user_op_if_integrity:
@@ -506,6 +517,9 @@ lemma do_user_op_if_integrity:
   apply (drule_tac auth=Write in user_op_access')
       apply (simp add: vspace_cap_rights_to_auth_def)+
   done
+
+end
+
 
 lemma check_active_irq_if_integrity:
  "\<lbrace> integrity aag X st \<rbrace>
@@ -642,10 +656,15 @@ lemma dmo_device_memory_update_globals_equiv_scheduler:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma globals_equiv_scheduler_exclusive_state_update[simp]:
   "globals_equiv_scheduler st (s\<lparr>machine_state := machine_state s\<lparr>exclusive_state := es\<rparr>\<rparr>) =
    globals_equiv_scheduler st s"
   by (simp add: globals_equiv_scheduler_def)
+
+end
+
 
 lemma do_user_op_if_globals_equiv_scheduler:
   "\<lbrace>globals_equiv_scheduler st and invs\<rbrace>
@@ -657,6 +676,8 @@ lemma do_user_op_if_globals_equiv_scheduler:
   apply (auto simp: ptable_lift_s_def ptable_rights_s_def)
   done
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma silc_dom_equiv_exclusive_state_update[simp]:
   "silc_dom_equiv aag st (s\<lparr>machine_state := machine_state s\<lparr>exclusive_state := es\<rparr>\<rparr>) =
    silc_dom_equiv aag st s"
@@ -664,6 +685,9 @@ lemma silc_dom_equiv_exclusive_state_update[simp]:
 
 crunch silc_dom_equiv[wp]: do_user_op_if "silc_dom_equiv aag st"
   (ignore: do_machine_op user_memory_update wp: crunch_wps select_wp)
+
+end
+
 
 lemma pas_refined_pasMayActivate_update[simp]:
   "pas_refined (aag\<lparr>pasMayActivate := x, pasMayEditReadyQueues := x\<rparr>) s = pas_refined aag s"
@@ -846,6 +870,9 @@ lemma pas_wellformed_noninterference_control_to_eq:
   unfolding pas_wellformed_noninterference_def
   by (erule aag_wellformed_Control; fastforce)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma owns_mapping_owns_asidpool:
   "\<lbrakk>kheap s p = Some (ArchObj (ASIDPool pool)); pool r = Some p';
    pas_refined aag s; is_subject aag p';
@@ -858,10 +885,16 @@ lemma owns_mapping_owns_asidpool:
   apply simp
   done
 
+end
+
+
 (* FIXME: MOVE *)
 lemma fun_noteqD:
   "f \<noteq> g \<Longrightarrow> \<exists> a. f a \<noteq> g a"
   by blast
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 text \<open>
   This a very important theorem that ensures that @{const subjectAffects} is
@@ -1021,6 +1054,9 @@ lemma partitionIntegrity_subjectAffects_obj:
       qed
     qed
   qed
+
+end
+
 
 lemma kheap_ep_tcb_states_of_state_eq:
   "kheap s x = kheap s' x \<Longrightarrow> tcb_states_of_state s x = tcb_states_of_state s' x"
@@ -1341,6 +1377,9 @@ lemma pas_refined_asid_mem:
          \<Longrightarrow> v \<in> pasPolicy aag"
   by (auto simp add: pas_refined_def)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma partitionIntegrity_subjectAffects_asid:
   "\<lbrakk>partitionIntegrity aag s s'; pas_refined aag s; valid_objs s; valid_arch_state s;
     valid_arch_state s';
@@ -1387,6 +1426,9 @@ lemma partitionIntegrity_subjectAffects_asid:
   apply (clarsimp simp: integrity_asids_def)
   apply (fastforce intro: affects_lrefl)
   done
+
+end
+
 
 lemma sameFor_subject_def2:
   "sameFor_subject g ab irqab asidab domainab l =
@@ -1539,7 +1581,6 @@ where
 crunch schact_is_rct[wp]: thread_set "schact_is_rct"
   (wp: get_object_wp simp: schact_is_rct_def)
 
-end
 
 section \<open>Valid initial state is complete unwinding system\<close>
 
@@ -1596,10 +1637,6 @@ lemma Fin_big_step_adt:
   done
 
 context valid_initial_state begin
-
-interpretation Arch . (*FIXME: arch_split*)
-
-
 
 lemma small_step_reachable:
   "ni.reachable s \<Longrightarrow> system.reachable (ADT_A_if utf) s0 s"
@@ -1834,6 +1871,11 @@ lemma partitionIntegrity_trans':
   apply(simp add: partitionIntegrity_current_aag_eq)
   done
 
+end
+
+context valid_initial_state begin
+
+interpretation Arch .
 
 lemma user_small_Step_partitionIntegrity:
   "\<lbrakk>((a, b), x, aa, ba) \<in> check_active_irq_A_if; ct_running b; Invs b;
@@ -1850,6 +1892,8 @@ lemma user_small_Step_partitionIntegrity:
   apply assumption
   done
 
+end
+
 lemma silc_inv_refl:
   "silc_inv aag st s \<Longrightarrow> silc_inv aag s s"
   by (fastforce simp: silc_inv_def silc_dom_equiv_def equiv_for_refl
@@ -1861,6 +1905,8 @@ lemma ct_active_cur_thread_not_idle_thread:
   apply(simp add: pred_tcb_at_def obj_at_def)
   apply auto
   done
+
+context valid_initial_state begin
 
 lemma kernel_call_A_if_partitionIntegrity:
   "\<lbrakk>((a, b), x, aa, ba) \<in> kernel_call_A_if e; e \<noteq> Interrupt; ct_active b; Invs b;
@@ -2228,6 +2274,11 @@ lemma get_thread_state_reads_respects_g:
         fastforce)
   done
 
+end
+
+context valid_initial_state begin
+
+interpretation Arch .
 
 lemma activate_thread_reads_respects_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -2251,6 +2302,8 @@ lemma activate_thread_reads_respects_g:
   apply(fastforce simp: invs_valid_ko_at_arm det_getRestartPC)
   done
 
+end
+
 lemmas set_scheduler_action_reads_respects_g =
     reads_respects_g[OF set_scheduler_action_reads_respects,
                      OF doesnt_touch_globalsI[where P="\<top>"],
@@ -2267,6 +2320,8 @@ lemma cur_thread_update_reads_respects_g':
                        idle_equiv_def)
   apply(fastforce intro: states_equiv_for_sym)
   done
+
+context begin interpretation Arch .
 
 (* clagged mostly from Scheduler_IF.dmo_storeWord_reads_respects_scheduler *)
 lemma dmo_storeWord_reads_respects_g[wp]:
@@ -2285,6 +2340,7 @@ lemma dmo_storeWord_reads_respects_g[wp]:
   apply (simp add: equiv_valid_def2 equiv_valid_2_def)
   done
 
+end
 
 lemmas thread_get_reads_respects_g =
     reads_respects_g[OF thread_get_rev,
@@ -2298,6 +2354,7 @@ lemmas set_vm_root_reads_respects_g[wp] =
                      simplified,
                      OF set_vm_root_globals_equiv]
 
+context begin interpretation Arch .
 
 lemma dmo_clearExMonitor_reads_respects_g':
   "equiv_valid (reads_equiv_g aag) (affects_equiv aag l)
@@ -2322,6 +2379,8 @@ lemma arch_switch_to_thread_reads_respects_g':
          | simp)+
   done
 
+end
+
 lemmas tcb_sched_action_reads_respects_g =
     reads_respects_g[OF tcb_sched_action_reads_respects,
                      OF _ doesnt_touch_globalsI[where P="\<top>"],
@@ -2341,6 +2400,8 @@ lemma set_tcb_queue_reads_respects_g':
        | clarsimp simp: reads_equiv_g_def
        | fastforce elim!: affects_equivE reads_equivE
                    simp: equiv_for_def globals_equiv_def idle_equiv_def)+)
+
+context begin interpretation Arch .
 
 (* consider rewriting the return-value assumption using equiv_valid_rv_inv *)
 lemma ev2_invisible':
@@ -2384,6 +2445,8 @@ lemma ev2_invisible':
   apply (erule_tac x=t in allE)
   apply fastforce
   done
+
+end
 
 lemma set_tcb_queue_globals_equiv[wp]:
   "\<lbrace>globals_equiv st\<rbrace> set_tcb_queue d prio queue \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
@@ -2467,12 +2530,16 @@ lemma guarded_switch_to_reads_respects_g:
   apply fastforce
   done
 
+context valid_initial_state begin interpretation Arch .
+
 lemma arch_switch_to_idle_thread_reads_respects_g[wp]:
   "reads_respects_g aag l \<top> (arch_switch_to_idle_thread)"
   apply(simp add: arch_switch_to_idle_thread_def)
   apply wp
   apply (clarsimp simp: reads_equiv_g_def globals_equiv_idle_thread_ptr)
   done
+
+end
 
 lemma cur_thread_update_idle_reads_respects_g':
   "reads_respects_g aag l (\<lambda>s. t = idle_thread s) (modify (cur_thread_update (\<lambda>_. t)))"
@@ -2482,6 +2549,8 @@ lemma cur_thread_update_idle_reads_respects_g':
                        idle_equiv_def)
   apply(fastforce intro: states_equiv_for_sym)
   done
+
+context valid_initial_state begin
 
 lemma switch_to_idle_thread_reads_respects_g[wp]:
   "reads_respects_g aag l \<top> (switch_to_idle_thread)"
@@ -2525,6 +2594,8 @@ lemma choose_thread_reads_respects_g:
   apply (rule Max_prop)
    apply force+
   done
+
+end
 
 lemma scheduler_action_switch_thread_is_subject:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -2591,6 +2662,8 @@ lemma reads_respects_is_highest_prio:
      (gets (\<lambda>s. is_highest_prio d p s))"
   by (fastforce simp: is_highest_prio_def intro: reads_respects_gets_ready_queues)
 
+context valid_initial_state begin
+
 lemma schedule_choose_new_thread_reads_respects_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -2607,6 +2680,8 @@ lemma schedule_choose_new_thread_reads_respects_g:
             hoare_pre_cont[where a=next_domain])
   apply (clarsimp simp: valid_sched_def)
   done
+
+end
 
 lemma reads_respects_ethread_get_when:
   "reads_respects aag l (\<lambda>_. b \<longrightarrow> is_subject aag thread) (ethread_get_when b f thread)"
@@ -2626,6 +2701,8 @@ lemma valid_sched_action_switch_is_subject:
   apply (fastforce dest: valid_sched_action_switch_subject_thread
                          domains_distinct[THEN pas_domains_distinct_inj])
   done
+
+context valid_initial_state begin
 
 lemma schedule_reads_respects_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -2695,6 +2772,12 @@ lemma schedule_if_reads_respects_g:
           | fastforce dest: domains_distinct[THEN pas_domains_distinct_inj])+
   done
 
+end
+
+context valid_initial_state begin
+
+interpretation Arch .
+
 lemma do_user_op_if_reads_respects_g:
   "reads_respects_g aag l (pas_refined aag and valid_pdpt_objs and einvs and
                            is_subject aag \<circ> cur_thread and det_inv InUserMode tc and ct_running)
@@ -2709,6 +2792,8 @@ lemma do_user_op_if_reads_respects_g:
    apply simp
   apply (simp add: invs_valid_idle)
   done
+
+end
 
 lemma sameFor_current_partition_sys_mode_of_eq:
   "\<lbrakk> (s, t) \<in> sameFor_subject
@@ -2725,6 +2810,8 @@ lemma sameFor_current_partition_sys_mode_of_eq:
   apply simp
   done
 
+context valid_initial_state begin
+
 lemma uwr_part_sys_mode_of_eq:
   "\<lbrakk>(s,t) \<in> uwr (part s); part t = part s; part s \<noteq> PSched\<rbrakk> \<Longrightarrow> sys_mode_of s = sys_mode_of t"
   apply(simp add: part_def split: if_split_asm)
@@ -2737,6 +2824,7 @@ lemma uwr_part_sys_mode_of_eq:
   apply (metis the_label_of_domain_exists)
   done
 
+end
 
 lemma flow_then_affect:
   "(Partition x, Partition l) \<in> policyFlows (pasPolicy initial_aag)
@@ -2744,6 +2832,8 @@ lemma flow_then_affect:
        \<in> partsSubjectAffects (pasPolicy initial_aag) x"
   apply(erule policyFlows.cases, simp_all add: partsSubjectAffects_def)
   done
+
+context valid_initial_state begin
 
 lemma uwr_reads_equiv_f_g_affects_equiv:
   "\<lbrakk>(s, t) \<in> uwr PSched; (s, t) \<in> uwr (part s); (s, t) \<in> uwr (Partition l);
@@ -2760,6 +2850,8 @@ lemma uwr_reads_equiv_f_g_affects_equiv:
    apply(simp add: part_def split: if_splits add: partition_def current_aag_def flow_then_affect)
   apply(clarsimp simp: uwr_def part_def current_aag_def partition_def split: if_splits)
   done
+
+end
 
 lemma check_active_irq_if_reads_respects_g:
   "reads_respects_g aag l (invs and only_timer_irq_inv irq st) (check_active_irq_if tc)"
@@ -2784,6 +2876,8 @@ lemma globals_equiv_globals_equiv_scheduler[elim]:
   "globals_equiv s t \<Longrightarrow> globals_equiv_scheduler s t"
   apply(clarsimp simp: globals_equiv_def globals_equiv_scheduler_def)
   done
+
+context valid_initial_state begin
 
 lemma reads_equiv_f_g_affects_equiv_uwr:
   "\<lbrakk>reads_equiv_f_g (current_aag (internal_state_if s)) (internal_state_if s')
@@ -2825,12 +2919,16 @@ lemma reads_equiv_f_g_affects_equiv_uwr:
   apply(simp add: current_aag_def)
   done
 
+end
+
 lemma use_ev:
   "\<lbrakk>equiv_valid I A B P f; (rv,s') \<in> fst (f s); (rv',t') \<in> fst (f t);
     P s; P t; I s t; A s t\<rbrakk> \<Longrightarrow>
     rv' = rv \<and> I s' t' \<and> B s' t'"
   apply(fastforce simp: equiv_valid_def2 equiv_valid_2_def)
   done
+
+context valid_initial_state begin
 
 lemma uwr_part_sys_mode_of_user_context_of_eq:
   "\<lbrakk>(s,t) \<in> uwr (part s); part s \<noteq> PSched\<rbrakk> \<Longrightarrow>
@@ -2977,6 +3075,10 @@ lemma invs_if_Invs:
         \<and> det_inv (sys_mode_of s) (cur_thread_context_of s) (internal_state_if s)"
   by (simp add: invs_if_def)
 
+end
+
+context valid_initial_state begin interpretation Arch .
+
 lemma do_user_op_A_if_confidentiality:
   notes
     read_respects_irq =
@@ -3066,6 +3168,10 @@ lemma do_user_op_A_if_confidentiality:
   apply(simp add: user_context_of_def)
   done
 
+end
+
+context valid_initial_state begin
+
 lemma do_user_op_A_if_confidentiality':
   "\<lbrakk>(XX, YY) \<in> uwr PSched; XX = s; YY = t; (s, t) \<in> uwr (part s); (s, t) \<in> uwr u;
     invs_if s;     invs_if t;     invs_if s';    invs_if t';
@@ -3148,6 +3254,8 @@ lemma kernel_schedule_if_confidentiality':
   apply(blast dest: kernel_schedule_if_confidentiality)
   done
 
+end
+
 lemma thread_set_tcb_context_update_runnable_globals_equiv:
   "\<lbrace>globals_equiv st and st_tcb_at runnable t and invs\<rbrace>
    thread_set (tcb_arch_update (arch_tcb_context_set uc)) t
@@ -3185,6 +3293,8 @@ lemmas thread_set_tcb_context_update_reads_respects_f_g =
                                     OF thread_set_tcb_context_update_reads_respects_g,
                                     OF _ thread_set_tcb_context_update_silc_inv]
 
+context begin interpretation Arch .
+
 lemma kernel_entry_if_reads_respects_f_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -3216,6 +3326,9 @@ lemma kernel_entry_if_reads_respects_f_g:
                   dest: domains_distinct[THEN pas_domains_distinct_inj])
   done
 
+end
+
+context valid_initial_state begin
 
 lemma kernel_call_A_if_confidentiality:
   notes active_from_running[simp]
@@ -3337,6 +3450,8 @@ lemma kernel_exit_if_reads_respects_g_2:
   apply(fastforce dest: requiv_g_cur_thread_eq)
   done
 
+end
+
 lemma reads_respects_f_g_2':
   "\<lbrakk>equiv_valid_2 (reads_equiv_g aag) (affects_equiv aag l) (affects_equiv aag l) (=) P P' f f';
      \<lbrace>silc_inv aag st and Q\<rbrace> f \<lbrace>\<lambda>_. silc_inv aag st\<rbrace>;
@@ -3356,6 +3471,8 @@ lemma reads_respects_f_g_2':
   apply(erule (1) use_valid, fastforce)
   done
 
+context valid_initial_state begin
+
 lemma kernel_exit_if_reads_respects_f_g_2:
   "equiv_valid_2 (reads_equiv_f_g aag) (affects_equiv aag l) (affects_equiv aag l) (=)
                  (silc_inv aag st and (\<lambda>s. cur_thread s = idle_thread s
@@ -3368,6 +3485,8 @@ lemma kernel_exit_if_reads_respects_f_g_2:
    apply(wp | simp | blast)+
   done
 
+end
+
 lemma use_ev2:
   "\<lbrakk>equiv_valid_2 I A B R P P' f f'; (rv,s') \<in> fst (f s); (rv',t') \<in> fst (f' t);
     P s; P' t; I s t; A s t\<rbrakk> \<Longrightarrow>
@@ -3379,6 +3498,8 @@ lemma reads_equiv_f_g_reads_equiv_g:
   "reads_equiv_f_g aag s t \<Longrightarrow> reads_equiv_g aag s t"
   apply(fastforce simp: reads_equiv_f_g_def reads_equiv_g_def)
   done
+
+context valid_initial_state begin
 
 lemma reads_equiv_g_ct_running_eq:
   "\<lbrakk>reads_equiv_g (current_aag bb) bd be; Invs bd; Invs be;
@@ -3560,6 +3681,8 @@ lemma small_Step_confidentiality_part_not_PSched:
         simp+)
   done
 
+end
+
 lemma unit_list_as_replicate:
   "(as::unit list) = replicate (length as) ()"
   apply(induct as, auto)
@@ -3584,6 +3707,8 @@ lemma unit_lists_unequal:
   apply(subst replicate_add[symmetric])
   apply simp
   done
+
+context valid_initial_state begin
 
 lemma partitionIntegrity_part_unchanged:
   "\<lbrakk>partitionIntegrity aag (internal_state_if s) (internal_state_if s'); part s \<noteq> PSched;
@@ -3662,15 +3787,17 @@ lemma sub_big_steps_strict_prefix:
   apply blast
   done
 
-lemma app_Cons:
-  "xs @ (a # b) = (xs @ [a]) @ b"
-  apply simp
-  done
-
 lemma uwr_part_sys_mode_of_eq':
   "\<lbrakk>(s,t) \<in> uwr (part x); part s = part x; part t = part x; part x \<noteq> PSched\<rbrakk>
     \<Longrightarrow> sys_mode_of s = sys_mode_of t"
   apply(fastforce intro: uwr_part_sys_mode_of_eq)
+  done
+
+end
+
+lemma app_Cons:
+  "xs @ (a # b) = (xs @ [a]) @ b"
+  apply simp
   done
 
 lemma sys_mode_of_eq_big_step_R_contradiction:
@@ -3692,6 +3819,8 @@ proof -
     done
   with that show ?thesis by (auto simp add: neq_Nil_conv)
 qed
+
+context valid_initial_state begin
 
 lemma non_PSched_steps_run_in_lock_step':
   "\<lbrakk>(s', as) \<in> sub_big_steps (ADT_A_if utf) big_step_R s;
@@ -3820,6 +3949,13 @@ lemma confidentiality_part_not_PSched:
   apply(fastforce dest: non_PSched_steps_run_in_lock_step)
   done
 
+end
+
+lemma try_some_magic: "(\<forall>x. y = Some x \<longrightarrow> P x) = ((\<exists>x. y = Some x) \<longrightarrow> P (the y))"
+by auto
+
+context begin interpretation Arch .
+
 lemma getActiveIRQ_ret_no_dmo[wp]:
   "\<lbrace>\<lambda>_. True\<rbrace> getActiveIRQ in_kernel \<lbrace>\<lambda>rv s. \<forall>x. rv = Some x \<longrightarrow> x \<le> maxIRQ\<rbrace>"
   apply (simp add: getActiveIRQ_def)
@@ -3828,10 +3964,6 @@ lemma getActiveIRQ_ret_no_dmo[wp]:
    apply (wp alternative_wp select_wp dmo_getActiveIRQ_irq_masks)
   apply clarsimp
   done
-
-
-lemma try_some_magic: "(\<forall>x. y = Some x \<longrightarrow> P x) = ((\<exists>x. y = Some x) \<longrightarrow> P (the y))"
-by auto
 
 lemma thread_set_as_user2:
   "thread_set (tcb_arch_update (arch_tcb_context_set uc)) t
@@ -3847,7 +3979,6 @@ proof -
                               arch_tcb_update_aux3)
     done
 qed
-
 
 lemma preemption_interrupt_scheduler_invisible:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -3891,6 +4022,7 @@ lemma preemption_interrupt_scheduler_invisible:
    apply (fastforce simp: silc_inv_not_cur_thread cur_thread_idle guarded_pas_domain_def)+
   done
 
+end
 
 lemma handle_preemption_agnostic_tc:
   "\<forall>P Q uc uc'. \<lbrace>P\<rbrace> handle_preemption_if uc \<lbrace>\<lambda>_. Q\<rbrace> \<longrightarrow> \<lbrace>P\<rbrace> handle_preemption_if uc' \<lbrace>\<lambda>_.Q\<rbrace>"
@@ -3923,6 +4055,7 @@ lemmas handle_preemption_reads_respects_scheduler_2 =
               agnostic_to_ev2[OF handle_preemption_agnostic_tc handle_preemption_agnostic_ret
                                  handle_preemption_reads_respects_scheduler]
 
+context begin interpretation Arch .
 
 lemma kernel_entry_scheduler_equiv_2:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -3993,6 +4126,10 @@ lemma kernel_entry_if_reads_respects_scheduler:
   apply force
   done
 
+end
+
+context valid_initial_state begin
+
 lemma interrupt_step:
   assumes interrupt:
     "\<And>r. (r,internal_state_if s')
@@ -4050,11 +4187,15 @@ lemma internal_state_s0: "internal_state_if s0 = s0_internal"
   apply (simp add: s0_def)
   done
 
+end
+
 (* FIXME: clarify the following comment *)
 (*Lets pretend PSched is labeled with SilcLabel*)
 fun label_for_partition where
    "label_for_partition (Partition a) = (OrdinaryLabel a)"
  | "label_for_partition PSched = SilcLabel"
+
+context valid_initial_state begin
 
 lemma uwr_scheduler_affects_equiv:
   "\<lbrakk>(s,s') \<in> uwr PSched; (s,s') \<in> uwr u; invs_if s; invs_if s'\<rbrakk> \<Longrightarrow>
@@ -4235,6 +4376,8 @@ lemma scheduler_step_1_confidentiality:
   apply (clarsimp simp add: sameFor_def sameFor_scheduler_def uwr_def)
   done
 
+end
+
 lemma schedule_if_context: "\<lbrace>\<top>\<rbrace> schedule_if tc \<lbrace>\<lambda>r s. r = tc\<rbrace>"
   apply (simp add: schedule_if_def)
   apply (wp | simp)+
@@ -4285,6 +4428,7 @@ lemmas schedule_if_reads_respects_scheduler_2 =
                                  schedule_if_reads_respects_scheduler]
 
 
+context valid_initial_state begin
 
 lemma scheduler_step_2_confidentiality:
   notes blob = invs_if_def Invs_def sys_mode_of_def silc_inv_cur pas_refined_cur
@@ -4498,6 +4642,8 @@ lemma confidentiality_part:
   apply(fastforce intro: confidentiality_part_not_PSched[rule_format])
   done
 
+end
+
 lemma big_Step2:
   "(s,s') \<in> system.Step (big_step_ADT_A_if utf) u \<Longrightarrow>
    (s,s') \<in> Simulation.Step (big_step_ADT_A_if utf) u"
@@ -4505,6 +4651,8 @@ lemma big_Step2:
                   ADT_A_if_def steps_def)
   apply blast
   done
+
+context valid_initial_state begin
 
 lemma confidentiality_u:
   notes split_paired_All[simp del]
@@ -4526,7 +4674,6 @@ lemma nonleakage:
   "ni.Nonleakage_gen"
   apply(rule Nonleakage_gen[OF confidentiality_u])
   done
-
 
 (* TOPLEVEL *)
 lemma xnonleakage:

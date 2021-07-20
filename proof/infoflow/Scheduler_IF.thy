@@ -14,14 +14,21 @@ context begin interpretation Arch . (*FIXME: arch_splits*)
 crunch cur_thread: activate_thread "\<lambda>s. P (cur_thread s)"
 crunch cur_thread: arch_switch_to_thread "\<lambda>s. P( cur_thread s)"
 
+end
+
 (* After SELFOUR-553 scheduler no longer writes to shared memory *)
 abbreviation scheduler_affects_globals_frame where
  "scheduler_affects_globals_frame s \<equiv>  {}"
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 definition globals_equiv_scheduler :: "'z::state_ext state \<Rightarrow> 'z::state_ext state \<Rightarrow> bool" where
 "globals_equiv_scheduler s s' \<equiv> arm_global_pd (arch_state s) = arm_global_pd (arch_state s') \<and>
      kheap s (arm_global_pd (arch_state s)) = kheap s' (arm_global_pd (arch_state s))
      \<and> idle_equiv s s' \<and> device_region s = device_region s'"
+end
+
 
 definition scheduler_globals_frame_equiv :: "'z::state_ext state \<Rightarrow> 'z::state_ext state \<Rightarrow> bool" where
 "scheduler_globals_frame_equiv s s' \<equiv> (\<forall>x\<in>scheduler_affects_globals_frame s. underlying_memory (machine_state s) x = underlying_memory (machine_state s') x
@@ -242,6 +249,9 @@ lemma reads_respects_scheduler_unobservable':
    apply (wp f g | force)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 definition swap_things where
   "swap_things s t \<equiv> t\<lparr> machine_state := underlying_memory_update
                                          (\<lambda>m a. if  a \<in> scheduler_affects_globals_frame t
@@ -249,6 +259,8 @@ definition swap_things where
                                                 else m a) (machine_state t)
                         \<lparr>exclusive_state := exclusive_state (machine_state s)\<rparr>\<rparr>
                       \<lparr>cur_thread := cur_thread s\<rparr>"
+
+end
 
 
 lemma idle_equiv_machine_state_update[simp]:
@@ -396,8 +408,6 @@ lemma ethread_get_when_reads_respects_scheduler[wp]:
   apply wp
   done
 
-end
-
 lemma (in is_extended') globals_equiv[wp]:
   "I (globals_equiv st)"
   by (rule lift_inv,simp)
@@ -405,8 +415,6 @@ lemma (in is_extended') globals_equiv[wp]:
 lemma (in is_extended') globals_equiv_scheduler[wp]:
   "I (globals_equiv_scheduler st)"
   by (rule lift_inv,simp)
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma tcb_domain_wellformed:
   "\<lbrakk>pas_refined aag s; ekheap s t = Some a\<rbrakk> \<Longrightarrow> pasObjectAbs aag t \<in> pasDomainAbs aag (tcb_domain a)"
@@ -434,13 +442,10 @@ lemma silc_dom_equiv_trans_state[simp]:
   "silc_dom_equiv aag st (trans_state f s) = silc_dom_equiv aag st s"
   by (simp add: silc_dom_equiv_def equiv_for_def)
 
-end
 
 lemma (in is_extended') silc_dom_equiv[wp]:
   "I (silc_dom_equiv aag st)"
   by (rule lift_inv,simp)
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma tcb_action_reads_respects_scheduler[wp]:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -489,6 +494,9 @@ lemma dmo_no_mem_globals_equiv_scheduler:
   apply (fastforce simp: valid_def globals_equiv_scheduler_def idle_equiv_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma clearExMonitor_globals_equiv_scheduler[wp]:
   "\<lbrace> globals_equiv_scheduler sta \<rbrace> do_machine_op clearExMonitor \<lbrace> \<lambda>_. globals_equiv_scheduler sta \<rbrace>"
   unfolding clearExMonitor_def including no_pre
@@ -520,6 +528,9 @@ lemma dmo_storeWord_reads_respects_scheduler[wp]:
                     )
   apply (simp add: equiv_valid_def2 equiv_valid_2_def)
   done
+
+end
+
 
 definition weak_scheduler_affects_equiv :: "'a subject_label PAS  \<Rightarrow> ('a subject_label) \<Rightarrow>
                                             det_state \<Rightarrow> det_state \<Rightarrow> bool"
@@ -553,6 +564,9 @@ where
    equiv_valid (scheduler_equiv aag) (weak_scheduler_affects_equiv aag l)
                (weak_scheduler_affects_equiv aag l) P f"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma store_cur_thread_midstrength_reads_respects:
   "equiv_valid (scheduler_equiv aag) (midstrength_scheduler_affects_equiv aag l)
            (scheduler_affects_equiv aag l) (invs and (\<lambda>s. t = idle_thread s))
@@ -573,6 +587,9 @@ lemma store_cur_thread_midstrength_reads_respects:
                          weak_scheduler_affects_equiv_def midstrength_scheduler_affects_equiv_def
                         idle_equiv_def)
    done
+
+end
+
 
 lemma globals_frame_equiv_as_states_equiv:
   "scheduler_globals_frame_equiv st s =
@@ -602,6 +619,9 @@ lemma silc_dom_equiv_states_equiv_lift:
    apply assumption
   apply (simp add: states_equiv_for_def equiv_for_def equiv_asids_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma scheduler_affects_equiv_unobservable:
   assumes a: "\<And>P Q R S st. \<lbrace>states_equiv_for P Q R S st\<rbrace> f \<lbrace>\<lambda>_. states_equiv_for P Q R S st\<rbrace>"
@@ -634,6 +654,9 @@ lemma scheduler_affects_equiv_unobservable:
   done
 qed
 
+end
+
+
 lemma midstrength_scheduler_affects_equiv_unobservable:
   assumes a: "\<And>P Q R S st. \<lbrace>states_equiv_for P Q R S st\<rbrace> f \<lbrace>\<lambda>_. states_equiv_for P Q R S st\<rbrace>"
   assumes w:
@@ -648,6 +671,9 @@ lemma midstrength_scheduler_affects_equiv_unobservable:
      apply (wp a w silc_dom_equiv_states_equiv_lift)
     apply clarsimp
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma dmo_mol_exclusive_state[wp]:
   "invariant (do_machine_op (machine_op_lift mop)) (\<lambda>s. P (exclusive_state (machine_state s)))"
@@ -671,6 +697,9 @@ lemma set_vm_root_reads_respects_scheduler[wp]:
   apply (wp silc_dom_equiv_states_equiv_lift set_vm_root_states_equiv_for | simp)+
   done
 
+end
+
+
 lemma thread_get_reads_respects_scheduler[wp]:
   "reads_respects_scheduler aag l (K(pasObjectAbs aag t \<in> reads_scheduler aag l)) (thread_get f t)"
   apply (rule gen_asm_ev)
@@ -680,8 +709,13 @@ lemma thread_get_reads_respects_scheduler[wp]:
                             equiv_for_def get_tcb_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch idle_thread[wp]: guarded_switch_to,schedule "\<lambda>(s :: det_state). P (idle_thread s)"
   (wp: crunch_wps simp: crunch_simps)
+end
+
 
 lemma silc_dom_lift:
   assumes a: "\<And>P. \<lbrace>\<lambda>s. P (kheap s)\<rbrace> f \<lbrace>\<lambda>r s. P (kheap s)\<rbrace>"
@@ -693,6 +727,9 @@ lemma silc_dom_lift:
 lemma dmo_silc_dom[wp]:
   "\<lbrace>silc_dom_equiv aag st\<rbrace> do_machine_op mop \<lbrace>\<lambda>_. silc_dom_equiv aag st\<rbrace>"
   by (wp silc_dom_lift)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch kheap[wp]: guarded_switch_to, schedule "\<lambda>s :: det_state. P (kheap s)"
   (wp: dxo_wp_weak crunch_wps simp: crunch_simps)
@@ -712,6 +749,9 @@ lemma clearExMonitor_scheduler_equiv[wp]:
   "\<lbrace> scheduler_equiv aag st \<rbrace> do_machine_op clearExMonitor \<lbrace> \<lambda>_. scheduler_equiv aag st \<rbrace>"
   by (rule scheduler_equiv_lift; wp)
 
+end
+
+
 lemma dmo_ev:
   "(\<And>s s'. equiv_valid (\<lambda>ms ms'. I (s\<lparr>machine_state := ms\<rparr>) (s'\<lparr>machine_state := ms'\<rparr>))
                    (\<lambda>ms ms'. A (s\<lparr>machine_state := ms\<rparr>) (s'\<lparr>machine_state := ms'\<rparr>))
@@ -729,6 +769,9 @@ lemma dmo_ev:
   apply fastforce
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma [wp]: "reads_respects_scheduler aag l (\<lambda>_. True) (do_machine_op clearExMonitor)"
   apply (simp add: clearExMonitor_def)
   apply (wp dmo_ev)
@@ -741,6 +784,9 @@ lemma [wp]: "reads_respects_scheduler aag l (\<lambda>_. True) (do_machine_op cl
                         equiv_asids_def equiv_asid_def scheduler_globals_frame_equiv_def
               simp del: split_paired_All)
   done
+
+end
+
 
 definition asahi_scheduler_affects_equiv ::
   "'a subject_label PAS \<Rightarrow> 'a subject_label \<Rightarrow> det_ext state \<Rightarrow> det_ext state \<Rightarrow> bool"
@@ -803,6 +849,9 @@ definition asahi_ex_scheduler_affects_equiv ::
           scheduler_globals_frame_equiv s s' \<and>
           exclusive_state_equiv s s')"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma asahi_ex_scheduler_affects_equiv_unobservable:
   assumes a: "\<And>P Q R S X st. \<lbrace>states_equiv_for P Q R S st\<rbrace> f \<lbrace>\<lambda>_. states_equiv_for P Q R S st\<rbrace>"
   assumes c: "\<And>P. \<lbrace>\<lambda>s. P (cur_domain s)\<rbrace> f \<lbrace>\<lambda>r s. P (cur_domain s)\<rbrace>"
@@ -831,6 +880,9 @@ lemma asahi_ex_scheduler_affects_equiv_unobservable:
   done
 qed
 
+end
+
+
 lemma asahi_ex_scheduler_affects_equiv_sym[elim]:
   "asahi_ex_scheduler_affects_equiv aag l s s' \<Longrightarrow> asahi_ex_scheduler_affects_equiv aag l s' s"
   apply (simp add: asahi_ex_scheduler_affects_equiv_def)
@@ -850,6 +902,9 @@ lemma asahi_ex_scheduler_affects_equiv_trans[elim]:
                      domain_fields_equiv_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma ev_asahi_to_asahi_ex_dmo_clearExMonitor:
   "equiv_valid (scheduler_equiv aag) (midstrength_scheduler_affects_equiv aag l)
                (asahi_ex_scheduler_affects_equiv aag l)
@@ -866,6 +921,9 @@ lemma ev_asahi_to_asahi_ex_dmo_clearExMonitor:
                         equiv_asids_def equiv_asid_def scheduler_globals_frame_equiv_def
               simp del: split_paired_All)
   done
+
+end
+
 
 lemma ev_asahi_ex_to_full_fragement:
   "equiv_valid (scheduler_equiv aag) (asahi_ex_scheduler_affects_equiv aag l)
@@ -884,6 +942,9 @@ lemma ev_asahi_ex_to_full_fragement:
                         weak_scheduler_affects_equiv_def
                         asahi_ex_scheduler_affects_equiv_def idle_equiv_def)
    done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma store_cur_thread_fragment_midstrength_reads_respects:
   "equiv_valid (scheduler_equiv aag) (midstrength_scheduler_affects_equiv aag l)
@@ -925,6 +986,8 @@ lemma arch_switch_to_thread_pas_refined[wp]:
   \<lbrace>\<lambda>rv. pas_refined aag\<rbrace>"
   unfolding arch_switch_to_thread_def
   by (wp do_machine_op_pas_refined | simp)+
+
+end
 
 
 lemma cur_thread_update_idle_reads_respects_scheduler:
@@ -1111,6 +1174,9 @@ lemma cur_thread_update_not_subject_reads_respects_scheduler:
   apply (blast dest: domains_distinct[THEN pas_domains_distinct_inj])
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma switch_to_thread_midstrength_reads_respects_scheduler[wp]:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -1145,6 +1211,9 @@ lemma switch_to_thread_midstrength_reads_respects_scheduler[wp]:
                   | simp)+
            apply (wp cur_thread_update_not_subject_reads_respects_scheduler | simp | fastforce)+
   done
+
+end
+
 
 lemma switch_to_thread_globals_equiv_scheduler[wp]:
   "\<lbrace>invs and globals_equiv_scheduler sta\<rbrace> switch_to_thread thread
@@ -1186,11 +1255,17 @@ lemma guarded_switch_to_thread_midstrength_reads_respects_scheduler[wp]:
    apply (wp gts_wp | simp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_switch_to_idle_thread_globals_equiv_scheduler[wp]:
   "\<lbrace>invs and globals_equiv_scheduler sta\<rbrace> arch_switch_to_idle_thread
        \<lbrace>\<lambda>_. globals_equiv_scheduler sta\<rbrace>"
   unfolding arch_switch_to_idle_thread_def storeWord_def
   by (wp dmo_wp modify_wp thread_get_wp' arch_switch_to_thread_globals_equiv_scheduler')
+
+end
+
 
 lemma switch_to_idle_thread_globals_equiv_scheduler[wp]:
   "\<lbrace>invs and globals_equiv_scheduler sta\<rbrace> switch_to_idle_thread
@@ -1199,6 +1274,9 @@ lemma switch_to_idle_thread_globals_equiv_scheduler[wp]:
   apply (wp | simp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch cur_domain[wp]: guarded_switch_to,arch_switch_to_idle_thread,choose_thread
                        "\<lambda>s. P (cur_domain s)"
   (wp: crunch_wps simp: crunch_simps)
@@ -1206,6 +1284,9 @@ crunch cur_domain[wp]: guarded_switch_to,arch_switch_to_idle_thread,choose_threa
 crunch domain_fields[wp]: guarded_switch_to,arch_switch_to_idle_thread, choose_thread
                           "domain_fields P"
   (wp: crunch_wps simp: crunch_simps)
+
+end
+
 
 lemma gets_evrv':
   "equiv_valid_rv I A B R (K (\<forall>s t. I s t \<and> A s t  \<longrightarrow> R (f s) (f t) \<and> B s t)) (gets f)"
@@ -1217,6 +1298,9 @@ lemma gets_ev_no_inv:
   apply (simp add: equiv_valid_def2)
   apply (auto intro: equiv_valid_rv_guard_imp[OF gets_evrv'])
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma switch_to_idle_thread_midstrength_reads_respects_scheduler[wp]:
   "midstrength_reads_respects_scheduler aag l (invs and pas_refined aag)
@@ -1237,6 +1321,9 @@ lemma switch_to_idle_thread_midstrength_reads_respects_scheduler[wp]:
               | assumption | simp | fastforce)+
   apply (clarsimp simp: scheduler_equiv_def)
   done
+
+end
+
 
 lemma gets_read_queue_ev_from_weak_sae:
   "(\<forall>s t. B s t \<longrightarrow> weak_scheduler_affects_equiv aag l s t)
@@ -1328,6 +1415,8 @@ lemma cur_thread_update_unobservable:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_switch_to_idle_thread_unobservable:
   "\<lbrace>(\<lambda>s. pasDomainAbs aag (cur_domain s) \<inter> reads_scheduler aag l = {}) and
         scheduler_affects_equiv aag l st and (\<lambda>s. cur_domain st = cur_domain s) and invs\<rbrace>
@@ -1339,6 +1428,8 @@ lemma arch_switch_to_idle_thread_unobservable:
                    invs_def valid_state_def)
   done
 
+end
+
 
 lemma switch_to_idle_thread_unobservable:
   "\<lbrace>(\<lambda>s. pasDomainAbs aag (cur_domain s) \<inter> reads_scheduler aag l = {}) and
@@ -1349,6 +1440,9 @@ lemma switch_to_idle_thread_unobservable:
   apply (wp cur_thread_update_unobservable arch_switch_to_idle_thread_unobservable)
   apply (clarsimp simp add: scheduler_equiv_def domain_fields_equiv_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma clearExMonitor_unobservable:
   "\<lbrace>(\<lambda>s. pasDomainAbs aag (cur_domain s) \<inter> reads_scheduler aag l = {}) and
@@ -1373,6 +1467,9 @@ lemma arch_switch_to_thread_unobservable:
   apply (simp add: arch_switch_to_thread_def)
   apply (wp set_vm_root_scheduler_affects_equiv clearExMonitor_unobservable | simp)+
   done
+
+end
+
 
 lemma tcb_sched_action_unobservable:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -2283,6 +2380,8 @@ lemma get_irq_state_reads_respects_scheduler_trivial:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma resetTimer_underlying_memory[wp]:
   "\<lbrace>\<lambda>s. P(underlying_memory s)\<rbrace> resetTimer \<lbrace>\<lambda>r s. P (underlying_memory s)\<rbrace>"
   apply (simp add: resetTimer_def machine_op_lift_def machine_rest_lift_def)
@@ -2294,6 +2393,8 @@ lemma resetTimer_irq_state[wp]:
   apply (simp add: resetTimer_def machine_op_lift_def machine_rest_lift_def)
   apply (wp | wpc| simp)+
   done
+
+end
 
 
 lemma dmo_resetTimer_underlying_memory[wp]:
@@ -2307,6 +2408,9 @@ lemma dmo_resetTimer_arch_state[wp]:
   "\<lbrace>\<lambda>s. P(arch_state s)\<rbrace> do_machine_op resetTimer \<lbrace>\<lambda>r s. P (arch_state s)\<rbrace>"
   by (wp dmo_wp | simp)+
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma dmo_resetTimer_device_state[wp]:
   "\<lbrace>\<lambda>s. P( device_state (machine_state s))\<rbrace>
       do_machine_op resetTimer
@@ -2318,6 +2422,9 @@ lemma dmo_resetTimer_exclusive_state[wp]:
       do_machine_op resetTimer
    \<lbrace>\<lambda>r s. P (exclusive_state (machine_state s))\<rbrace>"
   by (wp dmo_mol_exclusive_state | simp add: resetTimer_def)+
+
+end
+
 
 lemma dmo_resetTimer_reads_respects_scheduler:
   "reads_respects_scheduler aag l \<top> (do_machine_op resetTimer)"
@@ -2350,6 +2457,9 @@ lemma irq_inactive_or_timer:
     apply clarsimp+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma ackInterrupt_no_irq[wp]:
   "no_irq (ackInterrupt irq)"
   apply (clarsimp simp add:no_irq_def)
@@ -2377,6 +2487,7 @@ lemma ackInterrupt_reads_respects_scheduler:
   apply assumption
   done
 
+end
 
 
 lemma handle_interrupt_reads_respects_scheduler:
@@ -2464,6 +2575,9 @@ lemma dmo_return_distr:
                   bind_def get_def return_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 (*FIXME: Move to scheduler_if*)
 lemma dmo_getActive_IRQ_reads_respect_scheduler:
   "reads_respects_scheduler aag l (\<lambda>s. irq_masks_of_state st = irq_masks_of_state s)
@@ -2486,9 +2600,15 @@ lemma dmo_getActive_IRQ_reads_respect_scheduler:
   apply (simp add: scheduler_equiv_def)
   done
 
+end
+
+
 definition idle_context
 where
   "idle_context s = arch_tcb_context_get (tcb_arch (the (get_tcb (idle_thread s) s)))"
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma thread_set_context_globals_equiv:
   "\<lbrace>(\<lambda>s. t = idle_thread s \<longrightarrow> tc = idle_context s) and invs and globals_equiv st\<rbrace>
@@ -2502,6 +2622,9 @@ lemma thread_set_context_globals_equiv:
   apply (drule arm_global_pd_not_tcb[OF invs_valid_ko_at_arm])
   apply clarsimp
   done
+
+end
+
 
 lemma thread_set_scheduler_equiv[wp]:
   "\<lbrace>(invs and K(pasObjectAbs aag t \<noteq> SilcLabel) and
@@ -2639,6 +2762,9 @@ lemma as_user_silc_dom_equiv[wp]:
   apply (clarsimp simp: silc_dom_equiv_def equiv_for_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma scheduler_affects_equiv_update:
   "\<lbrakk>get_tcb x s = Some y;
     pasObjectAbs aag x \<notin> reads_scheduler aag l;
@@ -2650,6 +2776,9 @@ lemma scheduler_affects_equiv_update:
   apply (clarsimp simp: scheduler_globals_frame_equiv_def)
   apply (clarsimp simp: obj_at_def st_tcb_at_def get_tcb_def)
   done
+
+end
+
 
 lemma set_scheduler_action_wp[wp]:
   "\<lbrace>\<lambda>s. P () (s\<lparr>scheduler_action := a\<rparr>)\<rbrace> set_scheduler_action a \<lbrace>P\<rbrace>"
@@ -2688,6 +2817,9 @@ lemma st_tcb_at_not_idle_thread:
   apply (fastforce dest: st_tcb_at_idle_thread)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma activate_thread_reads_respects_scheduler[wp]:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -2717,6 +2849,8 @@ lemma activate_thread_reads_respects_scheduler[wp]:
                     invs_valid_idle)
    apply force+
   done
+
+end
 
 
 (*A function that is agnostic of its parameter with respect
@@ -2902,7 +3036,5 @@ lemma SilcLabel_affects_scheduler_equiv:
                    states_equiv_for_def equiv_for_def scheduler_equiv_def equiv_asids_def
                    equiv_asid_def globals_equiv_scheduler_def)
   done
-
-end
 
 end

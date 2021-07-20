@@ -43,6 +43,8 @@ lemma dmo_maskInterrupt_globals_equiv[wp]:
    apply(wp modify_wp | simp)+
    done
 
+end
+
 
 lemma setup_reply_master_globals_equiv:
   "\<lbrace>globals_equiv st and valid_ko_at_arm\<rbrace> setup_reply_master a \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
@@ -70,6 +72,9 @@ crunch globals_equiv[wp]: restart "globals_equiv st"
 
 declare as_user_globals_equiv[wp]
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma cap_ne_global_pd : "ex_nonz_cap_to word s \<Longrightarrow> valid_global_refs s \<Longrightarrow> word \<noteq> arm_global_pd (arch_state s)"
   unfolding ex_nonz_cap_to_def
   apply (simp only : cte_wp_at_caps_of_state zobj_refs_to_obj_refs)
@@ -80,6 +85,9 @@ lemma cap_ne_global_pd : "ex_nonz_cap_to word s \<Longrightarrow> valid_global_r
   apply (unfold cap_range_def)
   apply blast
   done
+
+end
+
 
 lemma globals_equiv_ioc_update[simp]: "globals_equiv st (is_original_cap_update f s) = globals_equiv st s"
   apply (simp add: globals_equiv_def idle_equiv_def)
@@ -121,8 +129,14 @@ lemma suspend_globals_equiv[wp]:
   apply auto
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch globals_equiv[wp]: prepare_thread_delete "globals_equiv st"
   (wp: dxo_wp_weak)
+
+end
+
 
 lemma finalise_cap_globals_equiv:
   "\<lbrace>globals_equiv st and (\<lambda>s. \<forall>p. cap = ThreadCap p \<longrightarrow> p \<noteq> idle_thread s)
@@ -140,6 +154,9 @@ lemma finalise_cap_globals_equiv:
 
 crunch valid_ko_at_arm[wp]: cap_swap_for_delete, restart "valid_ko_at_arm"
   (wp: dxo_wp_weak ignore: cap_swap_ext)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma rec_del_preservation2':
   assumes finalise_cap_P: "\<And>cap final. \<lbrace>R cap and P\<rbrace> finalise_cap cap final \<lbrace>\<lambda>_.P\<rbrace>"
@@ -253,6 +270,9 @@ next
 done
 qed
 
+end
+
+
 lemma rec_del_preservation2:
   "\<lbrakk>\<And>cap final. \<lbrace>R cap and P\<rbrace> finalise_cap cap final \<lbrace>\<lambda>_. P\<rbrace>; \<And>cap b. \<lbrace>Q and P\<rbrace> set_cap cap b \<lbrace>\<lambda>_. P\<rbrace>;
   \<And>cap b. invariant (set_cap cap b) Q; \<And>slot free. \<lbrace>Q and P\<rbrace> empty_slot slot free \<lbrace>\<lambda>_. P\<rbrace>;
@@ -274,6 +294,9 @@ lemma valid_ko_at_arm_irq_state_independent_A[simp, intro!]:
   "irq_state_independent_A (valid_ko_at_arm)"
   apply(auto simp: irq_state_independent_A_def valid_ko_at_arm_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma no_cap_to_idle_thread'': "valid_global_refs s \<Longrightarrow> caps_of_state s ref \<noteq> Some (ThreadCap (idle_thread s))"
   apply (clarsimp simp add: valid_global_refs_def valid_refs_def cte_wp_at_caps_of_state)
@@ -305,11 +328,17 @@ lemma rec_del_globals_equiv:
     apply (wp preemption_point_inv | simp)+
   done
 
+end
+
+
 lemma cap_delete_globals_equiv : "\<lbrace>globals_equiv st and invs and emptyable a\<rbrace> (cap_delete a) \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
   unfolding cap_delete_def
   apply (wp rec_del_globals_equiv)
   apply simp
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma no_cap_to_idle_thread': "valid_global_refs s \<Longrightarrow> \<not> ex_nonz_cap_to (idle_thread s) s"
   apply (clarsimp simp add: ex_nonz_cap_to_def valid_global_refs_def valid_refs_def)
@@ -319,6 +348,9 @@ lemma no_cap_to_idle_thread': "valid_global_refs s \<Longrightarrow> \<not> ex_n
   apply (case_tac cap,simp_all)
   done
 
+end
+
+
 lemma no_cap_to_idle_thread: "invs s \<Longrightarrow> \<not> ex_nonz_cap_to (idle_thread s) s"
   apply (rule no_cap_to_idle_thread')
   apply clarsimp
@@ -327,6 +359,8 @@ lemma no_cap_to_idle_thread: "invs s \<Longrightarrow> \<not> ex_nonz_cap_to (id
 crunch idle_thread_inv [wp]: set_mcpriority "\<lambda>s. P (idle_thread s)"
   (wp: syscall_valid crunch_wps rec_del_preservation cap_revoke_preservation)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* FIXME: Pretty general. Probably belongs somewhere else *)
 lemma invoke_tcb_thread_preservation:
@@ -402,6 +436,9 @@ shows "
        | rule conjI)+ (* also slow *)
 done
 
+end
+
+
 crunch idle_thread'[wp]: restart "\<lambda>s. P (idle_thread s)" (wp: dxo_wp_weak)
 
 lemma bind_notification_globals_equiv:
@@ -433,6 +470,9 @@ lemma dxo_globals_equiv[wp]:
   "\<lbrace>globals_equiv st\<rbrace> do_extended_op eop  \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
   by (simp | wp dxo_wp_weak)+
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma invoke_tcb_globals_equiv:
   "\<lbrace> invs and globals_equiv st and Tcb_AI.tcb_inv_wf ti\<rbrace>
    invoke_tcb ti
@@ -459,6 +499,8 @@ lemma invoke_tcb_globals_equiv:
                | intro conjI impI
                | clarsimp simp: no_cap_to_idle_thread)+
   done
+
+end
 
 
 section "reads respects"
@@ -646,6 +688,9 @@ lemmas thread_get_reads_respects_f = reads_respects_f[OF thread_get_reads_respec
 
 lemmas reschedule_required_reads_respects_f = reads_respects_f[OF reschedule_required_reads_respects, where Q="\<top>", simplified, OF _ reschedule_required_ext_extended.silc_inv]
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma invoke_tcb_reads_respects_f:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   notes validE_valid[wp del]
@@ -788,6 +833,9 @@ lemma invoke_tcb_reads_respects_f:
                    | intro impI
                    | rule conjI)+
 
+end
+
+
 lemma invoke_tcb_reads_respects_f_g:
   assumes domains_distinct: "pas_domains_distinct aag"
   shows
@@ -822,7 +870,5 @@ lemma decode_tcb_invocation_authorised_extra:
                               split_def decode_set_space_def
                    split del: if_split)+
   done
-
-end
 
 end

@@ -8,8 +8,6 @@ theory CNode_IF
 imports FinalCaps
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 lemma cap_fault_on_failure_rev:
   "reads_equiv_valid_inv A aag P m \<Longrightarrow> reads_equiv_valid_inv A aag P (cap_fault_on_failure cptr rp m)"
   unfolding cap_fault_on_failure_def handleE'_def
@@ -325,6 +323,9 @@ lemma tcb_at_def2: "tcb_at ptr s = (\<exists>tcb. kheap s ptr = Some (TCB tcb))"
   apply (clarsimp simp: tcb_at_def get_tcb_def split: kernel_object.splits option.splits)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma set_object_globals_equiv:
   "\<lbrace> globals_equiv s and (\<lambda> s. ptr \<noteq> arm_global_pd (arch_state s))
     and (\<lambda>t. ptr = idle_thread t \<longrightarrow>
@@ -367,6 +368,8 @@ lemma set_cap_globals_equiv:
    apply(fastforce simp: valid_global_objs_def valid_vso_at_def obj_at_def is_tcb_def)+
   done
 
+end
+
 
 lemma set_cdt_globals_equiv:
   "\<lbrace>globals_equiv s\<rbrace> set_cdt c \<lbrace>\<lambda>_. globals_equiv s\<rbrace>"
@@ -396,11 +399,7 @@ lemma globals_equiv_exst_update[simp]:
    globals_equiv st s"
   by (simp add: globals_equiv_def idle_equiv_def)
 
-end
-
 lemma (in is_extended') globals_equiv: "I (globals_equiv st)" by (rule lift_inv,simp)
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma cap_insert_globals_equiv:
   "\<lbrace>globals_equiv s and valid_global_objs\<rbrace>
@@ -427,6 +426,9 @@ lemma cap_swap_globals_equiv:
   apply(wp set_original_globals_equiv set_cdt_globals_equiv set_cap_globals_equiv
            dxo_wp_weak|simp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma aag_cap_auth_ASIDPoolCap:
   "pas_cap_cur_auth aag (ArchObjectCap (ASIDPoolCap r asid)) \<Longrightarrow>
@@ -707,6 +709,9 @@ lemma only_timer_irqs:
   apply(fastforce simp: domain_sep_inv_def)
   done
 
+end
+
+
 lemma dmo_getActiveIRQ_only_timer:
   "\<lbrace>domain_sep_inv False st and valid_irq_states\<rbrace>
    do_machine_op (getActiveIRQ in_kernel)
@@ -913,6 +918,9 @@ lemma equiv_valid_inv_conj_lift:
   apply fastforce+
  done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma dmo_getActiveIRQ_reads_respects:
   notes gets_ev[wp del]
   shows
@@ -932,6 +940,9 @@ lemma dmo_getActiveIRQ_globals_equiv:
   apply (wp dmo_getActiveIRQ_wp)
   apply(auto simp: globals_equiv_def idle_equiv_def)
   done
+
+end
+
 
 lemma dmo_getActiveIRQ_reads_respects_g :
   "reads_respects_g aag l (invs and only_timer_irq_inv irq st) (do_machine_op (getActiveIRQ in_kernel))"
@@ -1146,7 +1157,5 @@ lemma select_ext_ev:
   apply (clarsimp simp: select_ext_def gets_def get_def assert_def return_def bind_def)
   apply (simp add: equiv_valid_def2 equiv_valid_2_def return_def fail_def)
   done
-
-end
 
 end

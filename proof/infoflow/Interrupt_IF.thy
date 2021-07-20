@@ -72,6 +72,9 @@ lemma arch_invoke_irq_control_globals_equiv:
         | simp)+
   done
 
+end
+
+
 lemma invoke_irq_control_globals_equiv:
   "\<lbrace>globals_equiv st and valid_ko_at_arm and valid_global_objs \<rbrace> invoke_irq_control a
    \<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
@@ -80,6 +83,9 @@ lemma invoke_irq_control_globals_equiv:
              set_irq_state_valid_global_objs arch_invoke_irq_control_globals_equiv
           | simp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch valid_global_objs[wp]: cap_delete_one "valid_global_objs" (wp: dxo_wp_weak simp: unless_def ignore: empty_slot_ext)
 
@@ -93,8 +99,10 @@ lemma invoke_irq_handler_globals_equiv:
            cap_delete_one_valid_global_objs
             | simp add: maskInterrupt_def)+
 
-subsection "reads_respects_g"
+end
 
+
+subsection "reads_respects_g"
 
 lemma invoke_irq_handler_reads_respects_f_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -114,7 +122,5 @@ lemma invoke_irq_control_reads_respects_g:
   apply(rule doesnt_touch_globalsI)
    apply(wp invoke_irq_control_globals_equiv | simp)+
   done
-
-end
 
 end

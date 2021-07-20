@@ -8,8 +8,6 @@ theory Ipc_IF
 imports Finalise_IF
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 section "reads_respects"
 subsection "Notifications"
 
@@ -28,6 +26,9 @@ lemma dummy_machine_state_update:
   "st = st\<lparr>machine_state := machine_state st\<rparr>"
   apply simp
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma dmo_storeWord_modifies_at_most:
   "modifies_at_most aag (pasObjectAbs aag ` ptr_range p 2) \<top>
@@ -48,6 +49,7 @@ lemma dmo_storeWord_modifies_at_most:
    apply(fastforce simp: image_def dest: distinct_lemma[where f="pasObjectAbs aag"] intro: ptr_range_memI ptr_range_add_memI)+
   done
 
+end
 
 
 lemma get_object_reads_respects:
@@ -64,11 +66,16 @@ lemma get_cap_reads_respects:
   apply(wp get_object_reads_respects | wpc | simp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma lookup_ipc_buffer_reads_respects:
   "reads_respects aag l (K (aag_can_read aag thread \<or> aag_can_affect aag l thread)) (lookup_ipc_buffer is_receiver thread)"
   unfolding lookup_ipc_buffer_def
   apply(wp thread_get_reads_respects get_cap_reads_respects | wpc | simp)+
   done
+
+end
 
 
 lemmas lookup_ipc_buffer_reads_respects_g = reads_respects_g_from_inv[OF lookup_ipc_buffer_reads_respects lookup_ipc_buffer_inv]
@@ -84,6 +91,8 @@ lemma as_user_equiv_but_for_labels:
 
 crunch equiv_but_for_labels: set_message_info "equiv_but_for_labels aag L st"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma storeWord_equiv_but_for_labels:
   "\<lbrace>\<lambda>ms. equiv_but_for_labels aag L st (s\<lparr>machine_state := ms\<rparr>) \<and>
@@ -113,6 +122,9 @@ lemma storeWord_equiv_but_for_labels:
    apply(fastforce simp: equiv_asids_def equiv_asid_def elim: states_equiv_forE)
   apply(fastforce elim: states_equiv_forE intro: equiv_forI dest: equiv_forD[where f=ready_queues])
   done
+
+end
+
 
 lemma store_word_offs_equiv_but_for_labels:
   "\<lbrace> equiv_but_for_labels aag L st and K (for_each_byte_of_word (\<lambda>x. pasObjectAbs aag x \<in> L) (ptr + of_nat offs * of_nat word_size)) \<rbrace>
@@ -826,6 +838,9 @@ lemma send_signal_reads_respects:
   qed
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma receive_signal_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -843,6 +858,9 @@ lemma receive_signal_reads_respects:
   apply(force dest: reads_ep)
   done
 
+end
+
+
 subsection "Sync IPC"
 
 (* FIXME move *)
@@ -850,6 +868,9 @@ lemma conj_imp:
   "\<lbrakk>Q \<longrightarrow> R; P \<longrightarrow> Q; P' \<longrightarrow> Q\<rbrakk> \<Longrightarrow>
     (P \<longrightarrow> R) \<and> (P' \<longrightarrow> R)"
   by(fastforce)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* basically clagged directly from lookup_ipc_buffer_has_auth *)
 lemma lookup_ipc_buffer_has_read_auth:
@@ -884,6 +905,8 @@ lemma lookup_ipc_buffer_has_read_auth:
    apply(simp_all)
   done
 
+end
+
 
 definition
   aag_can_read_or_affect_ipc_buffer :: "'a PAS \<Rightarrow> 'a \<Rightarrow> word32 option \<Rightarrow> bool"
@@ -901,6 +924,9 @@ lemma lookup_ipc_buffer_aag_can_read_or_affect:
   apply(auto simp: ipc_buffer_has_read_auth_def aag_can_read_or_affect_ipc_buffer_def intro: reads_read_thread_read_pages simp: aag_can_affect_label_def split: option.splits)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma cptrs_in_ipc_buffer:
   "\<lbrakk>x \<in> set [buffer_cptr_index..<
              buffer_cptr_index + unat (mi_extra_caps mi)];
@@ -917,6 +943,9 @@ lemma cptrs_in_ipc_buffer:
   apply(subst upto_enum_step_shift_red[where us=2, simplified])
      apply (simp add: msg_align_bits word_bits_def word_size_bits_def)+
   done
+
+end
+
 
 lemma for_each_byte_of_word_def2:
   "for_each_byte_of_word P ptr \<equiv> (\<forall> x\<in>ptr_range ptr 2. P x)"
@@ -966,6 +995,9 @@ lemma lookup_extra_caps_rev:
 
 lemmas lookup_extra_caps_reads_respects_g =  reads_respects_g_from_inv[OF lookup_extra_caps_rev lookup_extra_caps_inv]
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma msg_in_ipc_buffer:
   "\<lbrakk>x = msg_max_length \<or> x < msg_max_length;
     unat (mi_length mi) < 2 ^ (msg_align_bits - word_size_bits);
@@ -985,6 +1017,8 @@ lemma msg_in_ipc_buffer:
    apply(rule refl)
   apply(auto simp: msg_max_length_def)
   done
+
+end
 
 
 lemma aag_has_auth_to_read_msg:
@@ -1081,6 +1115,9 @@ lemma ensure_no_children_rev:
    apply(wp, simp)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_derive_cap_reads_respects:
   "reads_respects aag l \<top> (arch_derive_cap cap)"
   unfolding arch_derive_cap_def
@@ -1096,6 +1133,9 @@ lemma derive_cap_rev':
   apply(rule equiv_valid_guard_imp)
   apply(wp ensure_no_children_rev | wpc | simp)+
   done
+
+end
+
 
 lemma derive_cap_rev:
   "reads_equiv_valid_inv A aag (\<lambda> s. pas_refined aag s \<and> is_subject aag (fst slot))
@@ -1263,6 +1303,8 @@ lemma is_aligned_mult_word_size:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma captransfer_in_ipc_buffer:
   "\<lbrakk>is_aligned (buffer :: word32) msg_align_bits;
     x \<in> {0..2}\<rbrakk> \<Longrightarrow>
@@ -1280,6 +1322,9 @@ lemma captransfer_in_ipc_buffer:
    apply simp+
   apply(fastforce intro: unat_less_helper word_leq_minus_one_le)
   done
+
+end
+
 
 lemma aag_has_auth_to_read_captransfer:
   "\<lbrakk>ipc_buffer_has_read_auth aag (pasSubject aag) (Some buffer);
@@ -1435,6 +1480,9 @@ lemma transfer_caps_reads_respects:
         | wpc | simp add: ball_conj_distrib)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma mrs_in_ipc_buffer:
   "\<lbrakk>is_aligned (buf :: word32) msg_align_bits;
     x \<in> set [length msg_registers + 1..<Suc n];
@@ -1453,6 +1501,9 @@ lemma mrs_in_ipc_buffer:
    apply(rule refl)
   apply (fastforce split: if_split_asm)
   done
+
+end
+
 
 lemma aag_has_auth_to_read_mrs:
   "\<lbrakk>aag_can_read_or_affect_ipc_buffer aag l (Some buf);
@@ -1476,6 +1527,9 @@ abbreviation aag_can_read_or_affect where
   "aag_can_read_or_affect aag l x \<equiv>
     aag_can_read aag x \<or> aag_can_affect aag l x"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma dmo_loadWord_reads_respects:
   "reads_respects aag l (K (for_each_byte_of_word (\<lambda> x. aag_can_read_or_affect aag l x) p))
      (do_machine_op (loadWord p))"
@@ -1498,6 +1552,9 @@ lemma dmo_loadWord_reads_respects:
       apply (wp wp_post_taut loadWord_inv | simp)+
   done
 
+end
+
+
 lemma load_word_offs_reads_respects:
   "reads_respects aag l (\<lambda> s. for_each_byte_of_word (\<lambda> x. aag_can_read_or_affect aag l x) (a + of_nat x * of_nat word_size)) (load_word_offs a x)"
   unfolding load_word_offs_def fun_app_def
@@ -1512,6 +1569,9 @@ lemma as_user_reads_respects:
   apply (wp set_object_reads_respects select_f_ev gets_the_ev)
   apply (auto intro: reads_affects_equiv_get_tcb_eq[where aag=aag])
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma copy_mrs_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1543,6 +1603,9 @@ lemma copy_mrs_reads_respects:
      apply (simp add: msg_align_bits word_bits_def aag_can_read_or_affect_ipc_buffer_def )+
   apply(fastforce simp: image_def)
   done
+
+end
+
 
 lemma get_mi_length':
    "\<lbrace>\<top>\<rbrace> get_message_info sender
@@ -1577,6 +1640,9 @@ lemma ev_irrelevant_bind:
       apply(rule ev[simplified equiv_valid_def2])
      apply(wp equiv_valid_rv_trivial[OF inv] inv | simp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma get_message_info_reads_respects:
   "reads_respects aag l (K (aag_can_read_or_affect aag l ptr)) (get_message_info ptr)"
@@ -1644,6 +1710,9 @@ lemma make_fault_msg_reads_respects:
                add: getRestartPC_det getRegister_det)+
   done
 
+end
+
+
 lemma set_mrs_returns_a_constant:
   "\<exists> x. \<lbrace> \<top> \<rbrace> set_mrs thread buf msgs \<lbrace> \<lambda> rv s. rv = x \<rbrace>"
   apply(case_tac buf)
@@ -1692,6 +1761,9 @@ lemma set_mrs_reads_respects':
    apply(rule set_mrs_ret_eq)
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma do_fault_transfer_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -1705,6 +1777,7 @@ lemma do_fault_transfer_reads_respects:
          | wp (once) hoare_drop_imps)+
   done
 
+end
 
 
 lemma tl_tl_in_set:
@@ -1756,6 +1829,9 @@ lemma do_ipc_transfer_reads_respects:
         | fastforce)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma complete_signal_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -1768,6 +1844,7 @@ lemma complete_signal_reads_respects:
         | wpc
         | simp)+
   done
+end
 
 lemma ko_at_eq:
   "ko_at obj pos s \<longleftrightarrow> kheap s pos = Some obj"
@@ -1971,6 +2048,8 @@ lemma handle_fault_reads_respects:
 
 subsection "Replies"
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma handle_arch_fault_reply_reads_respects:
   "reads_respects aag l (K (aag_can_read aag thread)) (handle_arch_fault_reply afault thread x y)"
   by (simp add: handle_arch_fault_reply_def, wp)
@@ -1983,6 +2062,9 @@ lemma handle_fault_reply_reads_respects:
           | simp add: det_zipWithM_x det_setRegister)+
   done
 
+end
+
+
 lemma lookup_ipc_buffer_has_read_auth':
   "\<lbrace>pas_refined aag and valid_objs and K (is_subject aag thread)\<rbrace>
    lookup_ipc_buffer is_receiver thread
@@ -1993,7 +2075,12 @@ lemma lookup_ipc_buffer_has_read_auth':
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch valid_ko_at_arm[wp]: handle_fault_reply "valid_ko_at_arm"
+
+end
+
 
 lemma do_reply_transfer_reads_respects_f:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -2067,6 +2154,9 @@ lemma handle_reply_reads_respects_f:
                    dest: aag_Control_into_owns)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma reply_from_kernel_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -2076,6 +2166,8 @@ lemma reply_from_kernel_reads_respects:
             as_user_reads_respects lookup_ipc_buffer_reads_respects
         | simp add: split_def det_setRegister)+
   done
+
+end
 
 
 (* FIXME in whole section replace preconditions with 10 differents invariants by invs *)
@@ -2181,6 +2273,7 @@ lemma do_normal_transfer_globals_equiv:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma do_fault_transfer_globals_equiv:
   "\<lbrace>globals_equiv s and valid_ko_at_arm and
@@ -2220,6 +2313,9 @@ lemma lookup_ipc_buffer_aligned':
   apply(fastforce simp: valid_def)
   done
 
+end
+
+
 lemma set_collection: "a = {x. x\<in>a}"
   by simp
 
@@ -2241,7 +2337,13 @@ lemma do_ipc_transfer_globals_equiv:
    apply(wp hoare_vcg_all_lift lookup_ipc_buffer_ptr_range' lookup_ipc_buffer_aligned' | fastforce)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch valid_ko_at_arm[wp]: do_ipc_transfer "valid_ko_at_arm"
+
+end
+
 
 lemma send_ipc_globals_equiv:
   "\<lbrace>globals_equiv st and valid_objs and valid_arch_state and valid_global_refs
@@ -2497,6 +2599,8 @@ lemma handle_fault_globals_equiv:
      done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma handle_fault_reply_globals_equiv:
   "\<lbrace>globals_equiv st and valid_ko_at_arm and (\<lambda>s. thread \<noteq> idle_thread s)\<rbrace>
       handle_fault_reply fault thread x y
@@ -2506,6 +2610,9 @@ lemma handle_fault_reply_globals_equiv:
      done
 
 crunch valid_global_objs: handle_fault_reply "valid_global_objs"
+
+end
+
 
 lemma do_reply_transfer_globals_equiv:
   "\<lbrace>globals_equiv st and valid_objs and valid_arch_state and valid_global_refs and pspace_distinct
@@ -2689,7 +2796,5 @@ lemma reply_from_kernel_reads_respects_g:
    apply(rule doesnt_touch_globalsI)
    apply(wp reply_from_kernel_globals_equiv | simp)+
   done
-
-end
 
 end

@@ -23,6 +23,9 @@ lemma arm_only_arch_gen_refs:
   "arch_gen_refs cap = {}"
   by (auto simp:arch_cap_set_map_def split: cap.splits)
 
+end
+
+
 (* FIXME: arch_split: need to have a label on arch refs*)
 fun pasGenAbs :: "'a PAS \<Rightarrow> gen_obj_ref \<Rightarrow> 'a"
 where
@@ -56,14 +59,14 @@ where
                  (Structures_A.obj_refs cap \<inter> Structures_A.obj_refs cap' \<noteq> {} \<or>
                  cap_irqs cap \<inter> cap_irqs cap' \<noteq> {} \<or>
                  arch_gen_refs cap \<inter> arch_gen_refs cap' \<noteq> {})}"
-end
+
 (* FIXME MOVE *)
 context strengthen_implementation begin
   lemma strengthen_cte_wp_at[strg]:
     "(\<And>x. st F (\<longrightarrow>) (P x) (Q x)) \<Longrightarrow> st F (\<longrightarrow>) (cte_wp_at P slot s) (cte_wp_at Q slot s)"
     by (cases F, auto elim:cte_wp_at_weakenE)
 end
-context begin interpretation Arch .
+
 
 lemma slots_holding_overlapping_caps_def':
   "slots_holding_overlapping_caps cap s =
@@ -183,11 +186,7 @@ lemma silc_inv_no_transferable':
 lemmas silc_inv_no_transferableD' =
                  silc_inv_no_transferable'[where slot="(a,b)" for a b, simplified]
 
-end
-
 lemma (in is_extended') silc_inv[wp]: "I (silc_inv aag st)" by (rule lift_inv,simp)
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma get_cap_cte_wp_at':
   "(fst (get_cap p s) = {(r,s)}) = cte_wp_at ((=) r) p s"
@@ -820,6 +819,7 @@ lemma set_cap_silc_inv:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma weak_derived_overlaps':
   "\<lbrakk>weak_derived cap cap';
@@ -835,6 +835,7 @@ lemma weak_derived_overlaps':
   subgoal for arch1 arch2 by (cases arch1; cases arch2; simp)
   done
 
+end
 
 
 lemma weak_derived_overlaps:
@@ -1025,6 +1026,9 @@ lemma set_untyped_cap_as_full_slots_holding_overlapping_caps_other:
   apply clarsimp
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma is_derived_overlaps':
   "\<lbrakk>is_derived (cdt s) slot cap cap';
     (Structures_A.obj_refs cap' \<noteq> {} \<or> cap_irqs cap' \<noteq> {}) \<or>
@@ -1034,6 +1038,9 @@ lemma is_derived_overlaps':
   apply(simp add: is_derived_def)
   apply(case_tac cap', simp_all add: cap_master_cap_def split: cap.splits arch_cap.splits)
   done
+
+end
+
 
 lemma is_derived_overlaps:
   "\<lbrakk>cte_wp_at (is_derived (cdt s) slot cap) slot s;
@@ -1130,11 +1137,7 @@ crunch kheap[wp]: deleted_irq_handler "\<lambda>s. P (kheap s x)"
 crunch silc_inv[wp]: deleted_irq_handler "silc_inv aag st"
   (wp: silc_inv_triv)
 
-end
-
 lemma (in is_extended') not_cte_wp_at[wp]: "I (\<lambda>s. \<not> cte_wp_at P t s)" by (rule lift_inv,simp)
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma set_thread_state_silc_inv[wp]:
   "\<lbrace>silc_inv aag st\<rbrace>
@@ -1231,6 +1234,9 @@ lemma silc_inv_is_original_cap[simp]:
   apply(simp add: silc_inv_def silc_dom_equiv_def equiv_for_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma empty_slot_silc_inv:
   "\<lbrace>silc_inv aag st and K (pasObjectAbs aag (fst slot) \<noteq> SilcLabel)\<rbrace>
    empty_slot slot free_irq
@@ -1245,6 +1251,7 @@ lemma empty_slot_silc_inv:
   apply (fastforce simp: all_children_def simp del: split_paired_All)
   done
 
+end
 
 
 
@@ -1375,6 +1382,8 @@ lemma silc_inv_arch_state[simp]:
   apply(simp add: silc_inv_def silc_dom_equiv_def equiv_for_def)
   done
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma set_pt_silc_inv[wp]:
    "\<lbrace> silc_inv aag st \<rbrace>
     set_pt ptr pt
@@ -1423,6 +1432,9 @@ lemma set_asid_pool_silc_inv[wp]:
 crunch silc_inv[wp]: arch_finalise_cap,prepare_thread_delete "silc_inv aag st"
   (wp: crunch_wps modify_wp simp: crunch_simps ignore: set_object)
 
+end
+
+
 (* FIXME MOVE *)
 lemma is_subject_not_silc_inv:
   "\<lbrakk>silc_inv aag st s; is_subject aag ptr\<rbrakk> \<Longrightarrow> pasObjectAbs aag ptr \<noteq> SilcLabel"
@@ -1464,6 +1476,9 @@ lemma validE_validE_R':
   apply(erule hoare_post_impErr)
   by auto
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma finalise_cap_ret_subset_cap_irqs:
   "\<lbrace>\<lambda> s. (cap_irqs cap) = X\<rbrace> finalise_cap cap blah \<lbrace>\<lambda>rv s. (cap_irqs (fst rv)) \<subseteq> X\<rbrace>"
   apply(case_tac cap)
@@ -1487,6 +1502,9 @@ lemma finalise_cap_ret_subset_obj_refs:
   apply(rule hoare_pre)
    apply(wpc | wp | simp)+
   done
+
+end
+
 
 lemma finalise_cap_ret_intra_label_cap:
   "\<lbrace>\<lambda> s. cap_points_to_label aag cap l\<rbrace>
@@ -1577,12 +1595,18 @@ lemma finalise_cap_ret_is_silc:
                         use_valid[OF _ finalise_cap_ret_subset_obj_refs])
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_finalise_cap_ret:
   "(rv, s') \<in> fst (arch_finalise_cap arch_cap final s) \<Longrightarrow> rv = (NullCap, NullCap)"
   apply(erule use_valid)
   unfolding arch_finalise_cap_def
   apply(wp | wpc | simp)+
   done
+
+end
+
 
 lemma finalise_cap_ret:
   "(rv, s') \<in> fst (finalise_cap cap final s)
@@ -1692,6 +1716,8 @@ lemma silc_inv_irq_state_independent_A[simp, intro!]:
   apply(simp add: silc_inv_def irq_state_independent_A_def silc_dom_equiv_def equiv_for_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma rec_del_silc_inv':
   notes drop_spec_valid[wp_split del] drop_spec_validE[wp_split del]
@@ -1824,6 +1850,9 @@ lemma rec_del_silc_inv':
     apply(fastforce simp: silc_inv_def cte_wp_at_caps_of_state zombie_ptr_emptyable)
     done
   qed
+
+end
+
 
 schematic_goal rec_del_silc_inv_not_transferable:
   "\<lbrace>?P\<rbrace>
@@ -2024,8 +2053,14 @@ lemma create_cap_silc_inv:
   apply (clarsimp simp: silc_inv_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch silc_inv[wp]: init_arch_objects "silc_inv aag st"
   (wp: crunch_wps hoare_unless_wp simp: crunch_simps)
+
+end
+
 
 lemma retype_region_silc_inv:
   "\<lbrace>silc_inv aag st  and K (range_cover ptr sz (obj_bits_api type o_bits) num_objects \<and>
@@ -2219,6 +2254,9 @@ lemma reset_untyped_cap_untyped_cap:
     apply clarsimp+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma invoke_untyped_silc_inv:
   "\<lbrace> silc_inv aag st and invs and pas_refined aag
       and ct_active and valid_untyped_inv ui
@@ -2353,6 +2391,8 @@ lemma perform_page_directory_invocation_silc_inv:
    apply (wp | simp)+
    done
 
+end
+
 
 lemma as_user_silc_inv[wp]:
   "\<lbrace>silc_inv aag st\<rbrace>
@@ -2408,6 +2448,9 @@ lemma set_mrs_silc_inv[wp]:
   apply(fastforce elim: cte_wp_atE intro: cte_wp_at_cteI cte_wp_at_tcbI)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch silc_inv[wp]: update_waiting_ntfn, set_message_info, invalidate_tlb_by_asid "silc_inv aag st"
 
 lemma send_signal_silc_inv[wp]:
@@ -2445,6 +2488,9 @@ lemma perform_page_invocation_silc_inv:
    apply(fastforce simp: silc_inv_def)
   apply(fastforce dest: is_arch_eq_pg_is_pt_or_pg_cap simp: silc_inv_def)
   done
+
+end
+
 
 lemma cap_insert_silc_inv':
   "\<lbrace>silc_inv aag st and K (is_subject aag (fst dest) \<and> is_subject aag (fst src) \<and>
@@ -2549,6 +2595,8 @@ lemma untyped_caps_are_intra_label:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma perform_asid_control_invocation_silc_inv:
   notes blah[simp del] =  atLeastAtMost_iff atLeastatMost_subset_iff atLeastLessThan_iff
   shows
@@ -2612,6 +2660,9 @@ lemma arch_perform_invocation_silc_inv:
   apply(clarsimp simp: authorised_arch_inv_def valid_arch_inv_def split: arch_invocation.splits)
   done
 
+end
+
+
 lemma interrupt_derived_ntfn_cap_identical_refs:
   "\<lbrakk>interrupt_derived cap cap'; is_ntfn_cap cap\<rbrakk> \<Longrightarrow>
    Structures_A.obj_refs cap = Structures_A.obj_refs cap' \<and>
@@ -2674,6 +2725,8 @@ lemma cap_delete_one_cte_wp_at_other:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma invoke_irq_handler_silc_inv:
   "\<lbrace>silc_inv aag st and pas_refined aag and irq_handler_inv_valid blah and
          K (authorised_irq_hdl_inv aag blah) \<rbrace>
@@ -2698,6 +2751,9 @@ lemma invoke_irq_handler_silc_inv:
        | simp add: pas_refined_def irq_map_wellformed_aux_def authorised_irq_hdl_inv_def)+
   done
 
+end
+
+
 lemma new_irq_handler_caps_are_intra_label:
   "\<lbrakk>cte_wp_at ((=) (IRQControlCap)) slot s; pas_refined aag s; is_subject aag (fst slot)\<rbrakk>
        \<Longrightarrow> cap_points_to_label aag (IRQHandlerCap irq) (pasSubject aag)"
@@ -2712,6 +2768,9 @@ lemma new_irq_handler_caps_are_intra_label:
 crunch silc_inv[wp]: set_irq_state "silc_inv aag st"
   (wp: silc_inv_triv)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_invoke_irq_control_silc_inv:
   "\<lbrace>silc_inv aag st and pas_refined aag and arch_irq_control_inv_valid arch_irq_cinv and
          K (arch_authorised_irq_ctl_inv aag arch_irq_cinv) \<rbrace>
@@ -2724,6 +2783,9 @@ lemma arch_invoke_irq_control_silc_inv:
         | simp add: authorised_irq_ctl_inv_def arch_irq_control_inv_valid_def)+
   apply(fastforce dest: new_irq_handler_caps_are_intra_label)
   done
+
+end
+
 
 lemma invoke_irq_control_silc_inv:
   "\<lbrace>silc_inv aag st and pas_refined aag and irq_control_inv_valid blah and
@@ -2760,6 +2822,9 @@ lemma imp_ball_lemma:
   apply auto
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma derive_cap_silc:
   "\<lbrace> \<lambda> s. (\<not> cap_points_to_label aag cap l) \<longrightarrow> (R (slots_holding_overlapping_caps cap s)) \<rbrace>
       derive_cap slot cap
@@ -2770,6 +2835,9 @@ lemma derive_cap_silc:
   apply(clarsimp simp: cap_points_to_label_def)
   apply (auto simp: slots_holding_overlapping_caps_def)
   done
+
+end
+
 
 lemma transfer_caps_silc_inv:
   "\<lbrace>silc_inv aag st and valid_objs and valid_mdb and pas_refined aag
@@ -2978,8 +3046,14 @@ lemma send_fault_ipc_silc_inv:
 
 crunch silc_inv[wp]: handle_fault "silc_inv aag st"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch silc_inv[wp]: do_reply_transfer "silc_inv aag st"
   (wp: thread_set_tcb_fault_update_silc_inv crunch_wps  ignore: set_object thread_set)
+
+end
+
 
 crunch silc_inv[wp]: reply_from_kernel "silc_inv aag st"
   (wp: crunch_wps simp: crunch_simps)
@@ -3000,6 +3074,9 @@ crunch silc_inv: restart "silc_inv aag st"
   (wp: crunch_wps simp: crunch_simps)
 
 crunch silc_inv: suspend "silc_inv aag st"
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma same_object_as_cap_points_to_label:
   "\<lbrakk>same_object_as a cap;
@@ -3026,6 +3103,9 @@ lemma same_object_as_slots_holding_overlapping_caps:
    apply(case_tac cap, simp_all)
   subgoal for arch1 arch2 by (cases arch1; cases arch2; simp)
   done
+
+end
+
 
 lemma checked_cap_insert_silc_inv:
   "\<lbrace>silc_inv aag st and K (is_subject aag (fst b) \<and> is_subject aag (fst e))\<rbrace>
@@ -3081,6 +3161,9 @@ lemma cap_insert_no_tcb_at[wp]:
  "\<lbrace>\<lambda>s. \<not> tcb_at t s\<rbrace> cap_insert cap src dest \<lbrace>\<lambda>rv s. \<not> tcb_at t s\<rbrace>"
   unfolding tcb_at_st_tcb_at by (wp cap_insert_no_pred_tcb_at)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma invoke_tcb_silc_inv:
   notes static_imp_wp [wp]
         static_imp_conj_wp [wp]
@@ -3135,6 +3218,8 @@ lemma invoke_tcb_silc_inv:
   by (clarsimp simp: is_cap_simps is_cnode_or_valid_arch_def is_valid_vtable_root_def
      |intro impI
      |rule conjI)+
+
+end
 
 lemma perform_invocation_silc_inv:
   "\<lbrace>silc_inv aag st and valid_invocation iv and
@@ -3210,6 +3295,9 @@ lemma handle_reply_silc_inv:
 
 crunch silc_inv: delete_caller_cap "silc_inv aag st"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma handle_recv_silc_inv:
   "\<lbrace>silc_inv aag st and invs and pas_refined aag and
     is_subject aag \<circ> cur_thread\<rbrace>
@@ -3275,6 +3363,9 @@ lemma handle_event_silc_inv:
 
 crunch silc_inv[wp]: activate_thread "silc_inv aag st"
 
+end
+
+
 lemma intra_label_cap_cur_thread[simp]:
   "intra_label_cap aag slot (s\<lparr>cur_thread := X\<rparr>) = intra_label_cap aag slot s"
   by (simp add: intra_label_cap_def)
@@ -3286,6 +3377,9 @@ lemma slots_holding_overlapping_caps_cur_thread[simp]:
 lemma silc_inv_cur_thread[simp]:
   "silc_inv aag st (s\<lparr>cur_thread := X\<rparr>) = silc_inv aag st s"
   by (simp add: silc_inv_def silc_dom_equiv_def equiv_for_def)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch silc_inv[wp]: schedule "silc_inv aag st"
   (   wp: alternative_wp OR_choice_weak_wp select_wp crunch_wps

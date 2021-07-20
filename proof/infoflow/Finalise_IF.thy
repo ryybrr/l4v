@@ -23,6 +23,9 @@ lemma dmo_maskInterrupt_reads_respects:
   apply (wp modify_wp | simp)+
   done
 
+end
+
+
 lemma set_irq_state_reads_respects:
   "reads_respects aag l \<top> (set_irq_state state irq)"
   unfolding set_irq_state_def fun_app_def
@@ -44,6 +47,9 @@ lemma deleted_irq_handler_reads_respects:
   apply(rule set_irq_state_reads_respects)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma empty_slot_reads_respects:
   notes split_paired_All[simp del] split_paired_Ex[simp del]
   shows
@@ -63,6 +69,9 @@ lemma empty_slot_reads_respects:
                 dest: aag_can_read_self
                split: option.splits)
 
+end
+
+
 lemma requiv_get_tcb_eq':
   "\<lbrakk>reads_equiv aag s t; aag_can_read aag thread\<rbrakk> \<Longrightarrow>
     get_tcb thread s = get_tcb thread t"
@@ -79,6 +88,9 @@ lemma requiv_the_get_tcb_eq':
   apply(fastforce intro: requiv_get_tcb_eq')
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 (* FIXME: move *)
 lemma set_object_modifies_at_most:
   "modifies_at_most aag {pasObjectAbs aag ptr} (\<lambda> s. \<not> asid_pool_at ptr s \<and> (\<forall> asid_pool. obj \<noteq> ArchObj (ASIDPool asid_pool))) (set_object ptr obj)"
@@ -86,6 +98,8 @@ lemma set_object_modifies_at_most:
   apply(wp set_object_equiv_but_for_labels)
   apply clarsimp
   done
+
+end
 
 
 lemma scheduler_action_states_equiv[simp]:
@@ -1221,6 +1235,9 @@ lemma cancel_ipc_reads_respects_f:
        apply (simp add: st_tcb_at_def obj_at_def | blast)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma update_restart_pc_reads_respects[wp]:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
   shows
@@ -1230,6 +1247,8 @@ lemma update_restart_pc_reads_respects[wp]:
   apply (subst as_user_bind)
   apply (wpsimp wp: as_user_set_register_reads_respects' as_user_get_register_reads_respects)
   done
+
+end
 
 lemma suspend_reads_respects_f:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1250,6 +1269,9 @@ lemma suspend_reads_respects_f:
     apply(wp cancel_ipc_silc_inv)+
   apply auto
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma prepare_thread_delete_reads_respects_f:
   "reads_respects_f aag l \<top> (prepare_thread_delete thread)"
@@ -1277,6 +1299,9 @@ lemma arch_finalise_cap_reads_respects:
         | rule aag_cap_auth_subject,assumption,assumption
         | drule cte_wp_valid_cap)+
   done
+
+end
+
 
 lemma deleting_irq_handler_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1385,6 +1410,9 @@ lemma finalise_cap_only_timer_irq_inv:
   apply (wp only_timer_irq_pres | force)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma finalise_cap_makes_halted:
   "\<lbrace>invs and valid_cap cap and (\<lambda>s. ex = is_final_cap' cap s)
          and cte_wp_at ((=) cap) slot\<rbrace>
@@ -1406,6 +1434,9 @@ lemma finalise_cap_makes_halted:
            | clarsimp simp: valid_cap_def split: option.split bool.split
            | intro impI conjI)+
   done
+
+end
+
 
 lemma rec_del_spec_reads_respects_f:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1664,6 +1695,7 @@ lemma cap_delete_reads_respects:
   by(wp rec_del_spec_reads_respects_f | rule use_spec_ev | simp | elim conjE | force)+
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (*NOTE: Required to dance around the issue of the base potentially
         being zero and thus we can't conclude it is in the current subject.*)
@@ -1704,16 +1736,19 @@ lemma maskInterrupt_no_exclusive:
   apply(wp modify_wp)
   by simp
 
-lemma globals_equiv_interrupt_states_update:
-  "globals_equiv st (s\<lparr> interrupt_states := x \<rparr>) = globals_equiv st s"
-  by(auto simp: globals_equiv_def idle_equiv_def)
-
 lemma set_irq_state_valid_global_objs:
   "invariant (set_irq_state state irq) (valid_global_objs)"
   apply(simp add: set_irq_state_def)
   apply(wp modify_wp)
   apply(fastforce simp: valid_global_objs_def)
   done
+
+end
+
+
+lemma globals_equiv_interrupt_states_update:
+  "globals_equiv st (s\<lparr> interrupt_states := x \<rparr>) = globals_equiv st s"
+  by(auto simp: globals_equiv_def idle_equiv_def)
 
 crunch device_state_invs[wp]: maskInterrupt "\<lambda> ms. P (device_state ms)"
   (ignore_del: maskInterrupt)
@@ -1862,16 +1897,25 @@ lemma transfer_caps_valid_ko_at_arm[wp]:
   unfolding transfer_caps_def
   by (wpsimp wp: transfer_caps_loop_pres cap_insert_valid_ko_at_arm)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma empty_slot_globals_equiv:
   "\<lbrace>globals_equiv st and valid_ko_at_arm\<rbrace> empty_slot s b\<lbrace>\<lambda>_. globals_equiv st\<rbrace>"
   unfolding empty_slot_def post_cap_deletion_def
   by (wpsimp wp: set_cap_globals_equiv'' set_original_globals_equiv hoare_vcg_if_lift2
                  set_cdt_globals_equiv dxo_wp_weak hoare_drop_imps hoare_vcg_all_lift)
 
+end
+
+
 crunch globals_equiv: cap_delete_one "globals_equiv st"
   (wp: set_cap_globals_equiv'' hoare_drop_imps simp: crunch_simps unless_def)
 
 crunch valid_ko_at_arm[wp]: thread_set "valid_ko_at_arm" (simp: arm_global_pd_not_tcb)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma set_asid_pool_valid_ko_at_arm[wp]:
   "\<lbrace>valid_ko_at_arm\<rbrace> set_asid_pool a b\<lbrace>\<lambda>_.valid_ko_at_arm\<rbrace>"

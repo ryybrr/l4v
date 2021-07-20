@@ -13,8 +13,6 @@ imports
 
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 crunch_ignore (add: OR_choice set_scheduler_action)
 
 (* The contents of the delete_globals_equiv locale *)
@@ -280,6 +278,8 @@ lemma invoke_cnode_reads_respects_f_g:
   done
 
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_perform_invocation_reads_respects_g:
   assumes domains_distinct: "pas_domains_distinct aag"
   shows
@@ -294,6 +294,9 @@ lemma arch_perform_invocation_reads_respects_g:
    apply (wp arch_perform_invocation_globals_equiv)
    apply (simp add: invs_valid_vs_lookup invs_def valid_state_def valid_pspace_def)+
   done
+
+end
+
 
 definition authorised_for_globals_inv :: "invocation \<Rightarrow> ('z::state_ext) state \<Rightarrow> bool" where
   "authorised_for_globals_inv oper \<equiv> \<lambda>s. case oper of InvokeArchObject ai \<Rightarrow> authorised_for_globals_arch_inv ai s | _ \<Rightarrow> True"
@@ -522,6 +525,9 @@ lemma lookup_cap_and_slot_reads_respects_g':
   apply simp
 done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma sts_authorised_for_globals_inv: "\<lbrace>authorised_for_globals_inv oper\<rbrace> set_thread_state d f \<lbrace>\<lambda>r. authorised_for_globals_inv oper\<rbrace>"
   unfolding authorised_for_globals_inv_def
             authorised_for_globals_arch_inv_def
@@ -539,6 +545,9 @@ lemma sts_authorised_for_globals_inv: "\<lbrace>authorised_for_globals_inv oper\
     apply (case_tac page_invocation)
         apply (simp | wp hoare_ex_wp)+
   done
+
+end
+
 
 lemma authorised_for_globals_triv:
   "\<forall> x y. f x \<noteq> InvokeArchObject y \<Longrightarrow>
@@ -625,6 +634,9 @@ lemma ct_active_not_idle: "invs s \<Longrightarrow> ct_active s \<Longrightarrow
   apply (rule ct_active_not_idle')
   apply (simp add: invs_valid_idle)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma handle_invocation_reads_respects_g:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -729,6 +741,9 @@ lemma handle_invocation_reads_respects_g:
   apply (force simp: only_timer_irq_inv_def runnable_eq_active)
   done
 
+end
+
+
 lemma delete_caller_cap_reads_respects_f:
   assumes domains_distinct: "pas_domains_distinct aag"
   shows
@@ -772,6 +787,8 @@ lemma delete_caller_cap_valid_ep_cap[wp]:  "\<lbrace>(\<lambda>s. s \<turnstile>
   apply clarsimp
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma handle_recv_reads_respects_f:
   fixes st aag
@@ -823,6 +840,9 @@ lemma handle_recv_reads_respects_f:
       apply simp
      apply (wp as_user_silc_inv[where st=st] | simp)+
   by (fastforce simp: det_getRegister invs_valid_objs tcb_at_invs)
+
+end
+
 
 lemma handle_recv_globals_equiv:
   "\<lbrace>globals_equiv (st :: det_state) and invs and ct_active\<rbrace>
@@ -912,6 +932,9 @@ lemma equiv_valid_vacuous:
 
 declare gts_st_tcb_at[wp del]
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma handle_interrupt_globals_equiv:
   "\<lbrace>globals_equiv (st :: det_ext state) and invs\<rbrace> handle_interrupt irq \<lbrace>\<lambda>r. globals_equiv st\<rbrace>"
   unfolding handle_interrupt_def
@@ -969,6 +992,9 @@ lemma handle_hypervisor_fault_globals_equiv:
   "\<lbrace>globals_equiv st\<rbrace> handle_hypervisor_fault thread hypfault_type \<lbrace>\<lambda>r. globals_equiv st\<rbrace>"
   by (cases hypfault_type; wpsimp)
 
+end
+
+
 lemma handle_vm_fault_reads_respects_g:
   "reads_respects_g aag l (K(is_subject aag thread) and (valid_ko_at_arm
                            and (\<lambda>s. thread \<noteq> idle_thread s)))
@@ -989,10 +1015,16 @@ lemma handle_hypervisor_fault_reads_respects_g:
   apply simp
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma irq_state_indepedent_top[simp, intro!]:
   "irq_state_independent (\<lambda>s. True)"
   apply(simp add: irq_state_independent_def)
   done
+
+end
+
 
 lemma handle_yield_reads_respects:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -1012,6 +1044,9 @@ lemma equiv_valid_hoist_guard:
   shows "equiv_valid_inv I A P f"
   using assms apply(fastforce simp: equiv_valid_def2 equiv_valid_2_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* we explicitly exclude the case where ev is Interrupt since this is a scheduler action *)
 lemma handle_event_reads_respects_f_g:
@@ -1076,6 +1111,9 @@ lemma handle_event_reads_respects_f_g:
   apply (clarsimp simp: requiv_g_cur_thread_eq reads_equiv_f_g_conj ct_active_not_idle)
   done
 
+end
+
+
 lemma as_user_reads_respects_g:
   "reads_respects_g aag k (valid_ko_at_arm and (\<lambda>s. thread \<noteq> idle_thread s)
                            and K (det f \<and> is_subject aag thread))
@@ -1088,10 +1126,15 @@ lemma as_user_reads_respects_g:
    apply simp+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma setNextPC_det :
   "det (setNextPC rva)"
   apply (auto simp: det_def setNextPC_def setRegister_def modify_def get_def put_def bind_def)
   done
+
+end
 
 
 lemma get_thread_state_reads_respects':
@@ -1102,6 +1145,9 @@ lemma get_thread_state_reads_respects':
   apply (rule requiv_get_tcb_eq')
   apply simp+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma activate_thread_reads_respects:
   assumes domains_distinct[wp]: "pas_domains_distinct aag"
@@ -1137,6 +1183,9 @@ lemma activate_thread_globals_equiv:
      | wpc
      | clarsimp simp add: arch_activate_idle_thread_def valid_idle_def pred_tcb_at_def obj_at_def
      | rule hoare_vcg_conj_lift)+
+
+end
+
 
 lemma activate_thread_reads_respects_g:
   assumes domains_distinct: "pas_domains_distinct aag"
@@ -1235,7 +1284,5 @@ lemma handle_event_globals_equiv:
              | wp (once) hoare_drop_imps
              | clarsimp simp: invs_imps invs_valid_idle ct_active_not_idle)+
   done
-
-end
 
 end

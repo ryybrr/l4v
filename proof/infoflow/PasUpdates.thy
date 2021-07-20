@@ -17,8 +17,6 @@ imports
     "AInvs.EmptyFail_AI"
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 section \<open>Separation lemmas for the idle thread and domain fields\<close>
 
 abbreviation (input) domain_fields
@@ -32,6 +30,8 @@ lemma preemption_point_domain_fields[wp]:
       | wpc
       | simp add: reset_work_units_def update_work_units_def)+
 
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch domain_fields[wp]: retype_region_ext,create_cap_ext,cap_insert_ext,ethread_set,
                           cap_move_ext,empty_slot_ext,cap_swap_ext,set_thread_state_ext,
                           tcb_sched_action,reschedule_required,cap_swap_for_delete,
@@ -44,6 +44,9 @@ crunch domain_fields[wp]: retype_region_ext,create_cap_ext,cap_insert_ext,ethrea
    ignore_del: retype_region_ext create_cap_ext cap_insert_ext ethread_set cap_move_ext
                empty_slot_ext cap_swap_ext set_thread_state_ext tcb_sched_action reschedule_required)
 
+end
+
+
 lemma cap_revoke_domain_fields[wp]:"\<lbrace>domain_fields P\<rbrace> cap_revoke a \<lbrace>\<lambda>_. domain_fields P\<rbrace>"
   by (rule cap_revoke_preservation2; wp)
 
@@ -51,6 +54,9 @@ lemma invoke_cnode_domain_fields[wp]: "\<lbrace>domain_fields P\<rbrace> invoke_
   unfolding invoke_cnode_def
   by (wpsimp wp: get_cap_wp hoare_vcg_all_lift hoare_vcg_imp_lift
       | rule conjI)+
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch domain_fields[wp]:
   set_domain,possible_switch_to,set_priority,set_extra_badge,
@@ -61,6 +67,9 @@ crunch domain_fields[wp]:
    ignore: check_cap_at syscall
    ignore_del: set_domain set_priority possible_switch_to
    rule: transfer_caps_loop_pres)
+
+end
+
 
 section \<open>PAS wellformedness property for non-interference\<close>
 
@@ -97,6 +106,9 @@ lemma pasIRQAbs_pasSubject_update:
   apply simp
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma state_asids_to_policy_pasSubject_update:
   "state_asids_to_policy_aux (aag\<lparr> pasSubject := x \<rparr>) caps asid vrefs =
    state_asids_to_policy_aux aag caps asid vrefs"
@@ -112,6 +124,9 @@ lemma state_asids_to_policy_pasSubject_update:
          subst pasASIDAbs_pasSubject_update[symmetric],
          rule state_asids_to_policy_aux.intros, assumption+)+
   done
+
+end
+
 
 lemma state_irqs_to_policy_pasSubject_update:
   "state_irqs_to_policy_aux (aag\<lparr> pasSubject := x \<rparr>) caps =
@@ -140,6 +155,9 @@ lemma tcb_domain_map_wellformed_pasSubject_update:
    tcb_domain_map_wellformed_aux aag irqn"
   by (clarsimp simp: tcb_domain_map_wellformed_aux_def)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma pas_refined_pasSubject_update':
    "\<lbrakk>pas_refined aag s; pas_wellformed (aag\<lparr> pasSubject := x \<rparr>)\<rbrakk> \<Longrightarrow>
    pas_refined (aag\<lparr> pasSubject := x \<rparr>) s"
@@ -151,6 +169,9 @@ lemma pas_refined_pasSubject_update':
    apply(fastforce simp: pas_refined_def state_asids_to_policy_pasSubject_update)
   apply(fastforce simp: pas_refined_def state_irqs_to_policy_pasSubject_update)
   done
+
+end
+
 
 lemma pas_wellformed_pasSubject_update:
   "\<lbrakk>pas_wellformed_noninterference aag; l \<in> pasDomainAbs aag d\<rbrakk> \<Longrightarrow>
@@ -193,6 +214,9 @@ lemma pasIRQAbs_pasMayActivate_update:
   "pasIRQAbs (aag\<lparr> pasMayActivate := x \<rparr>) = pasIRQAbs aag"
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma state_asids_to_policy_pasMayActivate_update:
   "state_asids_to_policy (aag\<lparr> pasMayActivate := x \<rparr>) s =
    state_asids_to_policy aag s"
@@ -208,6 +232,9 @@ lemma state_asids_to_policy_pasMayActivate_update:
          subst pasASIDAbs_pasMayActivate_update[symmetric],
          rule state_asids_to_policy_aux.intros, assumption+)+
   done
+
+end
+
 
 lemma state_irqs_to_policy_pasMayActivate_update:
   "state_irqs_to_policy (aag\<lparr> pasMayActivate := x \<rparr>) s =
@@ -260,6 +287,9 @@ lemma pasIRQAbs_pasMayEditReadyQueues_update:
   "pasIRQAbs (aag\<lparr> pasMayEditReadyQueues := x \<rparr>) = pasIRQAbs aag"
   by simp
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma state_asids_to_policy_pasMayEditReadyQueues_update:
   "state_asids_to_policy (aag\<lparr> pasMayEditReadyQueues := x \<rparr>) s =
    state_asids_to_policy aag s"
@@ -275,6 +305,9 @@ lemma state_asids_to_policy_pasMayEditReadyQueues_update:
          subst pasASIDAbs_pasMayEditReadyQueues_update[symmetric],
          rule state_asids_to_policy_aux.intros, assumption+)+
   done
+
+end
+
 
 lemma state_irqs_to_policy_pasMayEditReadyQueues_update:
   "state_irqs_to_policy (aag\<lparr> pasMayEditReadyQueues := x \<rparr>) s =
@@ -310,7 +343,5 @@ lemma cdt_change_allowedMayEditReadyQueues_update[simp]:
   "cdt_change_allowed (aag\<lparr>pasMayEditReadyQueues := x\<rparr>) =
    cdt_change_allowed aag"
   by (simp add: cdt_change_allowed_def[abs_def] cdt_direct_change_allowed.simps direct_call_def)
-
-end
 
 end

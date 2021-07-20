@@ -8,10 +8,11 @@ theory IRQMasks_IF
 imports "Access.ArchDomainSepInv"
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 abbreviation irq_masks_of_state :: "det_ext state \<Rightarrow> irq \<Rightarrow> bool" where
   "irq_masks_of_state s \<equiv> irq_masks (machine_state s)"
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma resetTimer_irq_masks[wp]:
   "\<lbrace>\<lambda>s. P (irq_masks s)\<rbrace> resetTimer \<lbrace>\<lambda>_ s. P (irq_masks s)\<rbrace>"
@@ -23,11 +24,16 @@ lemma storeWord_irq_masks[wp]:
   apply(wp del: no_irq | simp add: storeWord_def)+
   done
 
+end
+
 
 lemma detype_irq_masks[simp]:
   "irq_masks (machine_state (detype S s)) = irq_masks_of_state s"
   apply(simp add: detype_def)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma delete_objects_irq_masks[wp]:
   "\<lbrace>\<lambda>s. P (irq_masks_of_state s)\<rbrace> delete_objects param_a param_b
@@ -41,6 +47,9 @@ crunch irq_masks[wp]: invoke_untyped "\<lambda>s. P (irq_masks_of_state s)"
        wp: mapME_x_inv_wp preemption_point_inv
      simp: crunch_simps no_irq_clearMemory
            mapM_x_def_bak unless_def)
+
+end
+
 
 crunch irq_masks[wp]: cap_insert "\<lambda>s. P (irq_masks_of_state s)"
   (wp: crunch_wps)
@@ -67,6 +76,9 @@ lemma empty_slot_irq_masks:
   apply(rule hoare_gen_asm)
   apply(simp add: empty_slot_def post_cap_deletion_def | wp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch irq_masks[wp]: do_reply_transfer "\<lambda>s. P (irq_masks_of_state s)"
   (wp: crunch_wps empty_slot_irq_masks simp: crunch_simps unless_def)
@@ -97,6 +109,9 @@ lemma handle_interrupt_irq_masks:
         | wp (once) hoare_drop_imp)+
   apply (fastforce simp: domain_sep_inv_def)
   done
+
+end
+
 
 crunch irq_masks[wp]: cap_swap_for_delete "\<lambda>s. P (irq_masks_of_state s)"
 
@@ -176,6 +191,9 @@ lemma cap_delete_irq_masks:
    \<lbrace>\<lambda>_ s. P (irq_masks_of_state s)\<rbrace>,\<lbrace>\<lambda>_ s. P (irq_masks_of_state s)\<rbrace>"
   by (simp add: cap_delete_def) (wpsimp wp: rec_del_irq_masks)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma arch_invoke_irq_control_irq_masks:
   "\<lbrace>domain_sep_inv False st and arch_irq_control_inv_valid invok\<rbrace>
    arch_invoke_irq_control invok
@@ -183,6 +201,9 @@ lemma arch_invoke_irq_control_irq_masks:
   apply(case_tac invok)
   apply(clarsimp simp: arch_irq_control_inv_valid_def domain_sep_inv_def valid_def)
   done
+
+end
+
 
 lemma invoke_irq_control_irq_masks:
   "\<lbrace>domain_sep_inv False st and irq_control_inv_valid invok\<rbrace>
@@ -193,8 +214,14 @@ lemma invoke_irq_control_irq_masks:
   apply (clarsimp simp: arch_invoke_irq_control_irq_masks)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch irq_masks[wp]: arch_perform_invocation, bind_notification "\<lambda>s. P (irq_masks_of_state s)"
   (wp: dmo_wp crunch_wps no_irq simp: crunch_simps no_irq_cleanByVA_PoU no_irq_invalidateLocalTLB_ASID no_irq_do_flush)
+
+end
+
 
 crunch irq_masks[wp]: restart, set_mcpriority "\<lambda>s. P (irq_masks_of_state s)"
 
@@ -206,6 +233,9 @@ lemma checked_insert_irq_masks[wp]:
           \<lbrace>\<lambda>r s. P (irq_masks_of_state s)\<rbrace>"
   apply(wp | simp add: check_cap_at_def)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 (* FIXME: remove duplication in this proof -- requires getting the wp
           automation to do the right thing with dropping imps in validE
@@ -276,12 +306,15 @@ lemma invoke_tcb_irq_masks:
        | wpc)+
   by fastforce+
 
-crunch irq_masks[wp]: cap_move "\<lambda>s. P (irq_masks_of_state s)"
-
 lemma irq_state_independent_irq_masks:
   "irq_state_independent (\<lambda>s. P (irq_masks s))"
   apply(clarsimp simp: irq_state_independent_def)
   done
+
+end
+
+
+crunch irq_masks[wp]: cap_move "\<lambda>s. P (irq_masks_of_state s)"
 
 lemma preemption_point_irq_masks[wp]:
   "\<lbrace>\<lambda>s. P (irq_masks_of_state s)\<rbrace> preemption_point \<lbrace>\<lambda>_ s. P (irq_masks_of_state s)\<rbrace>"
@@ -313,9 +346,15 @@ lemma cap_revoke_irq_masks':
 
 lemmas cap_revoke_irq_masks = use_spec(2)[OF cap_revoke_irq_masks']
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch irq_masks[wp]: cancel_badged_sends "\<lambda>s. P (irq_masks_of_state s)"
   (wp: crunch_wps dmo_wp no_irq hoare_unless_wp simp: filterM_mapM crunch_simps no_irq_clearMemory no_irq_invalidateLocalTLB_ASID
    ignore: filterM)
+
+end
+
 
 lemma finalise_slot_irq_masks:
   "\<lbrace>(\<lambda>s. P (irq_masks_of_state s)) and domain_sep_inv False st\<rbrace> finalise_slot p e \<lbrace>\<lambda>_ s. P (irq_masks_of_state s)\<rbrace>"
@@ -393,6 +432,9 @@ crunch irq_masks[wp]: handle_reply "\<lambda>s. P (irq_masks_of_state s)"
 crunch irq_masks[wp]: handle_recv "\<lambda>s. P (irq_masks_of_state s)"
   (wp: crunch_wps simp: crunch_simps)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch irq_masks[wp]: handle_vm_fault, handle_hypervisor_fault "\<lambda>s. P (irq_masks_of_state s)"
   (wp: dmo_wp no_irq ignore: getFAR getDFSR getIFSR simp: no_irq_getDFSR no_irq_getFAR no_irq_getIFSR)
 
@@ -414,6 +456,8 @@ lemma dmo_getActiveIRQ_return_axiom[wp]:
    apply (wp alternative_wp select_wp dmo_getActiveIRQ_irq_masks)
   apply clarsimp
   done
+
+end
 
 
 lemma handle_yield_irq_masks_of_state[wp]:
@@ -442,6 +486,9 @@ lemma handle_event_irq_masks:
                         \<and> (\<forall>x. rv = Some x \<longrightarrow> x \<le> maxIRQ)" in hoare_strengthen_post)
     apply (wp | clarsimp)+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 crunch irq_masks[wp]: activate_thread "\<lambda>s. P (irq_masks_of_state s)"
 

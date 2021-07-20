@@ -678,8 +678,6 @@ section \<open>ADT_A_if definition and enabledness\<close>
 
 subsection \<open>global_automaton_if definition\<close>
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 text \<open>
   We define a bunch of states that the system can be in. The first two
   are when the processor is in user mode, the final four are for when in
@@ -775,6 +773,9 @@ where
      { ( (s, InIdleMode),
          (s', InIdleMode) ) |s s'. (s, None, s') \<in> get_active_irqf}"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 type_synonym user_state_if = "user_context \<times> user_mem \<times> device_state \<times> exclusive_monitors"
 
 text \<open>
@@ -845,6 +846,9 @@ lemma do_user_op_if_invs:
    apply simp
   apply (clarsimp simp: valid_state_def device_frame_in_device_region)
   done
+
+end
+
 
 crunch domain_sep_inv[wp]: do_user_op_if "domain_sep_inv irqs st"
   (ignore: user_memory_update wp: select_wp)
@@ -968,6 +972,9 @@ lemma thread_set_silc_inv_trivial:
   apply(fastforce elim: cte_wp_atE intro: cte_wp_at_cteI cte_wp_at_tcbI)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma kernel_entry_if_invs:
   "\<lbrace>invs and (\<lambda>s. e \<noteq> Interrupt \<longrightarrow> ct_active s)\<rbrace>
    kernel_entry_if e tc
@@ -1044,6 +1051,9 @@ lemma kernel_entry_if_globals_equiv:
   apply (clarsimp simp: cur_thread_idle)
   done
 
+end
+
+
 lemma kernel_entry_if_idle_equiv:
   "\<lbrace>invs and (\<lambda>s. e \<noteq> Interrupt \<longrightarrow> ct_active s) and idle_equiv st
        and (\<lambda>s. ct_idle s \<longrightarrow> tc = idle_context s) \<rbrace>
@@ -1080,6 +1090,9 @@ lemma thread_set_tcb_context_update_domain_sep_inv[wp]:
      thread_set (tcb_arch_update (arch_tcb_context_set f)) t
    \<lbrace>\<lambda>rv. domain_sep_inv irqs st\<rbrace>"
   by(wp domain_sep_inv_triv)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma kernel_entry_silc_inv[wp]:
   "\<lbrace>silc_inv aag st and einvs and simple_sched_action and
@@ -1122,6 +1135,9 @@ lemma kernel_entry_if_domain_sep_inv:
             thread_set_invs_trivial thread_set_not_state_valid_sched)+
   done
 
+end
+
+
 lemma kernel_entry_if_guarded_pas_domain:
   "\<lbrace>guarded_pas_domain aag\<rbrace>
      kernel_entry_if e tc
@@ -1129,6 +1145,9 @@ lemma kernel_entry_if_guarded_pas_domain:
   apply (simp add: kernel_entry_if_def)
   apply (wp guarded_pas_domain_lift)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma kernel_entry_if_valid_sched:
   "\<lbrace>valid_sched and invs and (ct_active or ct_idle) and
@@ -1148,6 +1167,9 @@ lemma kernel_entry_if_irq_masks:
   apply( simp add: kernel_entry_if_def ran_tcb_cap_cases arch_tcb_update_aux2 tcb_arch_ref_def
        | wp handle_event_irq_masks thread_set_invs_trivial)+
   by fastforce
+
+end
+
 
 crunch valid_list[wp]: kernel_entry_if "valid_list"
 
@@ -1208,6 +1230,9 @@ lemma handle_preemption_if_guarded_pas_domain[wp]:
   "\<lbrace>guarded_pas_domain aag\<rbrace> handle_preemption_if tc \<lbrace>\<lambda>_. guarded_pas_domain aag\<rbrace>"
   by (rule guarded_pas_domain_lift; wp)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma handle_preemption_if_valid_sched[wp]:
   "\<lbrace>valid_sched and invs and (\<lambda>s. irq \<in> non_kernel_IRQs \<longrightarrow> scheduler_act_sane s \<and> ct_not_queued s)\<rbrace>
       handle_preemption_if irq \<lbrace>\<lambda>_. valid_sched\<rbrace>"
@@ -1215,7 +1240,9 @@ lemma handle_preemption_if_valid_sched[wp]:
    apply (wpsimp wp: hoare_drop_imp hoare_vcg_if_lift2)+
   done
 
-context begin interpretation Arch . (*FIXME: arch_split*)
+end
+
+
 lemma handle_preemption_if_irq_masks:
   "\<lbrace>(\<lambda>s. P (irq_masks_of_state s)) and domain_sep_inv False st\<rbrace>
    handle_preemption_if tc
@@ -1224,7 +1251,6 @@ lemma handle_preemption_if_irq_masks:
   apply(rule_tac Q="\<lambda>rv s. P (irq_masks_of_state s) \<and> domain_sep_inv False st s \<and>
                     (\<forall>x. rv = Some x \<longrightarrow> x \<le> maxIRQ) " in hoare_strengthen_post)
     by(wp | simp)+
-end
 
 crunch valid_list[wp]: handle_preemption_if "valid_list"
   (ignore: getActiveIRQ)
@@ -1258,11 +1284,17 @@ lemma schedule_if_invs[wp]:
    apply(rule hoare_strengthen_post[OF activate_invs] | simp | wp)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunches schedule
   for pspace_aligned[wp]: "\<lambda>s :: det_ext state. pspace_aligned s"
   and valid_vspace_objs[wp]: "\<lambda>s :: det_ext state. valid_vspace_objs s"
   and valid_arch_state[wp]: "\<lambda>s :: det_ext state. valid_arch_state s"
   (wp: crunch_wps)
+
+end
+
 
 crunch pas_refined[wp]: schedule_if "pas_refined aag"
 
@@ -1270,8 +1302,14 @@ crunch silc_inv[wp]: schedule_if "silc_inv aag st"
 
 crunch domain_sep_inv[wp]: schedule_if "\<lambda>s::det_state. domain_sep_inv irqs st s"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 crunch cur_domain[wp]: activate_thread "\<lambda>s. P (cur_domain s)"
 crunch idle_thread[wp]: activate_thread "\<lambda>s. P (idle_thread s)"
+
+end
+
 
 lemma activate_thread_guarded_pas_domain[wp]:
   "\<lbrace>guarded_pas_domain aag\<rbrace> activate_thread \<lbrace>\<lambda>_. guarded_pas_domain aag\<rbrace>"
@@ -1298,12 +1336,18 @@ lemma guarded_pas_domain_machine_state_update[simp]:
 (* FIXME: Why was the [wp] attribute clobbered by interpretation of the Arch locale? *)
 declare storeWord_irq_masks[wp]
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma switch_to_idle_thread_guarded_pas_domain[wp]:
   "\<lbrace>\<top>\<rbrace> switch_to_idle_thread \<lbrace>\<lambda>xb. guarded_pas_domain aag\<rbrace>"
   apply (simp add: switch_to_idle_thread_def arch_switch_to_idle_thread_def bind_assoc
                    double_gets_drop_regets)
   apply (wp modify_wp dmo_wp hoare_vcg_imp_lift | wp (once) | simp add: guarded_pas_domain_def)+
   done
+
+end
+
 
 lemma choose_thread_guarded_pas_domain:
   "\<lbrace>pas_refined aag and valid_queues\<rbrace> choose_thread \<lbrace>\<lambda>xb. guarded_pas_domain aag\<rbrace>"
@@ -1402,6 +1446,9 @@ lemma set_thread_state_scheduler_action:
   apply(clarsimp simp: st_tcb_at_def obj_at_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma activate_thread_scheduler_action[wp]:
   "\<lbrace> \<lambda>s. P (scheduler_action (s::det_state)) \<rbrace> activate_thread \<lbrace> \<lambda>_ s. P (scheduler_action s)\<rbrace>"
   apply(simp add: activate_thread_def arch_activate_idle_thread_def
@@ -1409,6 +1456,7 @@ lemma activate_thread_scheduler_action[wp]:
   apply(fastforce elim: st_tcb_weakenE)
   done
 
+end
 
 
 declare gts_st_tcb_at[wp del]
@@ -1490,6 +1538,9 @@ abbreviation internal_state_if :: "((MachineTypes.register \<Rightarrow> 32 word
 where
   "internal_state_if \<equiv> \<lambda>s. (snd (fst s))"
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma valid_device_abs_state_eq:
   "\<lbrakk>valid_machine_state s\<rbrakk> \<Longrightarrow> abs_state s = s"
   apply (simp add: abs_state_def observable_memory_def)
@@ -1501,7 +1552,7 @@ lemma valid_device_abs_state_eq:
   apply (fastforce simp: user_mem_def option_to_0_def valid_machine_state_def)
   done
 
-
+end
 
 
 (*Weakened invs_if to properties only necessary for refinement*)
@@ -1529,13 +1580,10 @@ where
                 \<and> scheduler_action (internal_state_if s) = resume_cur_thread
            | _ \<Rightarrow> True) }"
 
-end
 
 (*We'll define this later, currently it doesn't matter if
   we restrict the permitted steps of the system*)
 consts step_restrict :: "(det_state global_sys_state) \<Rightarrow> bool"
-
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 definition ADT_A_if
   :: "(user_transition_if) \<Rightarrow> (det_state global_sys_state, observable_if, unit) data_type"
@@ -1643,7 +1691,6 @@ definition cur_context
 where
   "cur_context s = arch_tcb_context_get (tcb_arch (the (get_tcb (cur_thread s) s)))"
 
-end
 
 subsection \<open>Locales setup\<close>
 
@@ -1697,7 +1744,24 @@ locale invariant_over_ADT_if =
       \<lbrace>\<lambda>rv. case (fst rv) of Some irq \<Rightarrow> det_inv (KernelEntry Interrupt) (snd rv)
             | None \<Rightarrow> det_inv InIdleMode (snd rv)\<rbrace>"
 
-locale valid_initial_state_noenabled = invariant_over_ADT_if + Arch + (* FIXME: arch_split *)
+(* FIXME ryanb *)
+context Arch begin
+
+definition valid_vspace_objs' where
+  "valid_vspace_objs' \<equiv> valid_pdpt_objs"
+
+declare valid_vspace_objs'_def[simp]
+
+end
+context begin interpretation Arch .
+
+requalify_consts
+  valid_vspace_objs'
+
+end
+
+
+locale valid_initial_state_noenabled = invariant_over_ADT_if + (* FIXME: arch_split *)
   fixes s0_internal :: det_state
   fixes initial_aag :: "'a subject_label PAS"
   fixes timer_irq :: "10 word"
@@ -1727,7 +1791,7 @@ locale valid_initial_state_noenabled = invariant_over_ADT_if + Arch + (* FIXME: 
                                pas_refined (current_aag s) s \<and>
                                guarded_pas_domain (current_aag s) s \<and>
                                idle_equiv s0_internal s \<and>
-                               valid_domain_list s \<and> valid_pdpt_objs s"
+                               valid_domain_list s \<and> valid_vspace_objs' s"
   assumes Invs_s0_internal: "Invs s0_internal"
   assumes det_inv_s0: "det_inv KernelExit (cur_context s0_internal) s0_internal"
 
@@ -3846,7 +3910,6 @@ lemma big_step_ADT_A_if_enabled_Step_system:
 
 end
 section \<open>Generic big step refinement\<close>
-context begin interpretation Arch . (*FIXME: arch_split*)
 
 definition internal_R
 where
@@ -4033,7 +4096,5 @@ definition uop_sane :: "user_transition_if \<Rightarrow> bool"
 where
   "uop_sane f \<equiv> \<forall>t pl pr pxn tcu. (f t pl pr pxn tcu) \<noteq> {} \<and>
                 (\<forall>tc um es. (Some Interrupt, tc, um, es) \<notin> (f t pl pr pxn tcu))"
-
-end
 
 end

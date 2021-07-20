@@ -8,8 +8,6 @@ theory UserOp_IF
 imports Syscall_IF "Access.ArchADT_AC"
 begin
 
-context begin interpretation Arch . (*FIXME: arch_split*)
-
 text \<open>
   This theory defines an enhanced @{term do_user_op} function for the
   automaton used for the information flow proofs. This enhanced model of
@@ -17,6 +15,8 @@ text \<open>
   eventually we should probably extend the original one to match up with
   this one and remove the duplication.
 \<close>
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 definition ptable_lift_s where
   "ptable_lift_s s \<equiv>  ptable_lift (cur_thread s) s"
@@ -44,6 +44,9 @@ definition getExMonitor :: "exclusive_monitors machine_monad" where
 
 definition setExMonitor :: "exclusive_monitors \<Rightarrow> unit machine_monad" where
   "setExMonitor es \<equiv> modify (\<lambda>ms. ms\<lparr>exclusive_state := es\<rparr>)"
+
+end
+
 
 definition
   "compl (A::'a set) \<equiv> - A"
@@ -121,6 +124,9 @@ lemma dmo_user_memory_update_reads_respects_g:
     apply(fastforce intro: equiv_forI elim: equiv_forE split: option.splits)
    apply (wp | simp)+
    done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma requiv_get_pd_of_thread_eq:
   "\<lbrakk> reads_equiv aag s s'; pas_refined aag s; is_subject aag (cur_thread s);
@@ -364,11 +370,17 @@ lemma requiv_ptable_lift_eq:
   apply (subst requiv_get_page_info_eq, simp+)[1]
   done
 
+end
+
+
 lemma requiv_ptable_xn_eq:
   "\<lbrakk> reads_equiv aag s s'; pas_refined aag s; pas_refined aag s';
      is_subject aag (cur_thread s); invs s; invs s'; ptable_rights_s s x \<noteq> {} \<rbrakk>
    \<Longrightarrow> ptable_xn_s s x = ptable_xn_s s' x"
   by (simp add: ptable_xn_s_def requiv_ptable_attrs_eq)
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma mask_shift_le:
  "z \<le> y \<Longrightarrow> (x::'a:: len word) && ~~ mask z >> y = x >> y"
@@ -974,6 +986,8 @@ lemma requiv_user_device_eq:
                                vspace_cap_rights_to_auth_def)+
   done
 
+end
+
 
 lemma gets_ev''':
   "equiv_valid_inv I A (\<lambda>s. P s \<and> (\<forall> t. I s t \<and> A s t \<and> P t \<longrightarrow> f s = f t)) (gets f)"
@@ -1003,6 +1017,9 @@ lemma reads_equiv_g_refl:
   apply (rule globals_equiv_refl)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 definition context_matches_state where
   "context_matches_state pl pr pxn um ds es s \<equiv>
       pl = ptable_lift_s s |` {x. pr x \<noteq> {}} \<and>
@@ -1012,6 +1029,9 @@ definition context_matches_state where
       ds = (device_state (machine_state s) \<circ> ptrFromPAddr)
                          |` {y. \<exists>x. pl x = Some y \<and> AllowRead \<in> pr x} \<and>
       es = exclusive_state (machine_state s)"
+
+end
+
 
 (* FIXME - move - duplicated in Schedule_IF *)
 lemma dmo_ev:
@@ -1055,9 +1075,15 @@ lemma dmo_getExMonitor_reads_respects_g:
   apply (clarsimp simp: reads_equiv_g_def globals_equiv_def)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma getExMonitor_wp[wp]:
   "\<lbrace>\<lambda>ms. P (exclusive_state ms) ms\<rbrace> getExMonitor \<lbrace>P\<rbrace>"
   by (simp add: getExMonitor_def | wp)+
+
+end
+
 
 lemma map_add_eq:
   "\<lbrakk>ms x = ms' x\<rbrakk> \<Longrightarrow> (ms ++ um) x = (ms' ++ um) x"
@@ -1136,6 +1162,9 @@ lemma restrict_map_eq_same_domain_compl:
   apply fastforce
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma do_user_op_reads_respects_g:
   notes split_paired_All[simp del]
   shows
@@ -1198,6 +1227,7 @@ lemma do_user_op_reads_respects_g:
     apply (clarsimp simp: context_matches_state_def comp_def  reads_equiv_g_def globals_equiv_def)
   apply (clarsimp simp: reads_equiv_g_def globals_equiv_def)
   done
+
 end
 
 end

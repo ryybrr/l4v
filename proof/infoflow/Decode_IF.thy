@@ -17,6 +17,8 @@ lemma data_to_obj_type_rev:
   apply simp
   done
 
+end
+
 
 lemma ensure_empty_rev:
   "reads_equiv_valid_inv A aag (K (is_subject aag (fst slot))) (ensure_empty slot)"
@@ -61,6 +63,9 @@ lemma decode_untyped_invocation_rev:
   apply(auto dest: is_cnode_into_is_subject elim: prop_of_obj_ref_of_cnode_cap)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma derive_cap_rev':
   "reads_equiv_valid_inv A aag (\<lambda> s. (\<exists>x xa xb dev. cap = cap.UntypedCap dev x xa xb) \<longrightarrow>
          pas_refined aag s \<and> is_subject aag (fst slot)) (derive_cap slot cap)"
@@ -68,6 +73,9 @@ lemma derive_cap_rev':
   apply(rule equiv_valid_guard_imp)
   apply(wp ensure_no_children_rev | wpc | simp)+
   done
+
+end
+
 
 lemma derive_cap_rev:
   "reads_equiv_valid_inv A aag (\<lambda> s. pas_refined aag s \<and> is_subject aag (fst slot)) (derive_cap slot cap)"
@@ -167,6 +175,9 @@ lemma slot_cap_long_running_delete_reads_respects_f:
                     dest: silc_inv_not_subject)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma check_valid_ipc_buffer_rev:
   "reads_equiv_valid_inv A aag \<top> (check_valid_ipc_buffer vptr cap)"
   unfolding check_valid_ipc_buffer_def fun_app_def
@@ -174,6 +185,8 @@ lemma check_valid_ipc_buffer_rev:
   apply(wpc | wp)+
   apply simp
   done
+
+end
 
 
 lemma no_state_changes:
@@ -229,6 +242,9 @@ lemma decode_set_sched_params_rev:
   apply (case_tac excs; clarsimp)
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma decode_tcb_invocation_reads_respects_f:
   notes respects_f = reads_respects_f[where st=st and Q=\<top>]
   shows
@@ -272,6 +288,8 @@ lemma decode_tcb_invocation_reads_respects_f:
   apply (cases excaps;simp)
   by (fastforce simp: aag_cap_auth_def cap_auth_conferred_def cap_rights_to_auth_def)
 
+end
+
 
 lemma get_irq_state_rev:
   "reads_equiv_valid_inv A aag (K (is_subject_irq aag irq)) (get_irq_state irq)"
@@ -286,6 +304,9 @@ lemma is_irq_active_rev:
   unfolding is_irq_active_def fun_app_def
   apply (wp get_irq_state_rev)
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma arch_decode_irq_control_invocation_rev:
   "reads_equiv_valid_inv A aag (pas_refined aag and
@@ -329,6 +350,9 @@ lemma decode_irq_control_invocation_rev:
   apply(fastforce dest: is_cnode_into_is_subject intro: bang_0_in_set)
   done
 
+end
+
+
 (* this one doesn't read from the state at all *)
 lemma decode_irq_handler_invocation_rev:
   "reads_equiv_valid_inv A aag \<top>
@@ -337,6 +361,8 @@ lemma decode_irq_handler_invocation_rev:
   apply (wp | simp add: split_def Let_def | rule conjI impI)+
   done
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma ensure_safe_mapping_reads_respects:
   "reads_respects aag l (K (authorised_slots aag entries)) (ensure_safe_mapping entries)"
@@ -391,6 +417,9 @@ lemma check_vp_alignment_rev:
   apply(wp | simp add: crunch_simps split del: if_split)+
   done
 
+end
+
+
 lemmas reads_respects_f_inv = reads_respects_f[where Q="\<top>", simplified]
 
 lemma gets_applyE:
@@ -404,6 +433,9 @@ lemma gets_apply_wp:
   apply(simp add: gets_apply_def)
   apply wp
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma asid_high_bits_of_1:
   "asid_high_bits_of 1 = 0"
@@ -436,16 +468,25 @@ lemma pas_cap_cur_auth_ASIDControlCap:
     apply(rule pas_refined_Control_into_is_subject_asid, blast+)
   done
 
+end
+
+
 lemma owns_cnode_owns_obj_ref_of_child_cnodes:
   "\<lbrakk>pas_refined aag s; is_subject aag (fst slot);
         cte_wp_at ((=) cap) slot s; is_cnode_cap cap\<rbrakk>
        \<Longrightarrow> is_subject aag (obj_ref_of cap)"
   by (blast intro: owns_cnode_owns_obj_ref_of_child_cnodes_threads_and_zombies)
 
+
+context begin interpretation Arch . (*FIXME: arch_split*)
+
 lemma vspace_cap_rights_to_auth_mono:
   "R \<subseteq> S \<Longrightarrow> vspace_cap_rights_to_auth R \<subseteq> vspace_cap_rights_to_auth S"
   apply(auto simp: vspace_cap_rights_to_auth_def)
   done
+
+end
+
 
 lemma vspace_cap_rights_to_auth_mask_vm_rights:
   "vspace_cap_rights_to_auth
@@ -477,6 +518,9 @@ lemma select_ext_ev_bind_lift: "(\<And>s t. \<lbrakk>I s t; A s t; a s \<in> S; 
   apply (rule select_ext_ev_bind)
   apply simp+
   done
+
+
+context begin interpretation Arch . (*FIXME: arch_split*)
 
 lemma resolve_vaddr_reads_respects:
   "reads_respects aag l (K (is_subject aag (lookup_pd_slot pd vptr && ~~ mask pd_bits)) and
@@ -678,6 +722,9 @@ lemma arch_decode_invocation_reads_respects_f:
   apply assumption
   done
 
+end
+
+
 lemma decode_domain_invocation_reads_respects_f:
   "reads_respects_f aag l \<top> (decode_domain_invocation label args excaps)"
 apply (simp add: decode_domain_invocation_def)
@@ -741,7 +788,5 @@ lemma decode_invocation_reads_respects_f:
 lemmas decode_invocation_reads_respects_f_g =
        reads_respects_f_g[OF decode_invocation_reads_respects_f doesnt_touch_globalsI,
                           where Q="\<top>", simplified, OF decode_inv_inv]
-
-end
 
 end
